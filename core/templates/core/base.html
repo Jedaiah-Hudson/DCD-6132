@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ template_data.title }}</title>
+</head>
+<body>
+
+<nav>
+    <a href="/">Dashboard</a> |
+    <a href="/notifications/">Notifications</a> |
+    <a href="/profile/">Profile</a>
+</nav>
+
+<hr>
+
+{% block content %}{% endblock content %}
+
+</body>
+</html>
