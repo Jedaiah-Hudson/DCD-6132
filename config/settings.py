@@ -39,8 +39,10 @@ INSTALLED_APPS = [
     'rest_framework', ## for django rest framework, if ur planning on making apis, INSTALL pip install djangorestframework
     'rest_framework.authtoken', ## for api end point aunthentication, Install pip install djangorestframework.authtoken
     'core', ## local django app
+    'crispy_forms', ## for crispy forms in templates, Install pip install django-crispy-forms
+    'accounts' ## for user management, Install pip install django-user-management
 ]
-AUTH_USER_MODEL = 'core.User'  # 'core' is the app name where the User model lives
+AUTH_USER_MODEL = 'accounts.User'  # 'core' is the app name where the User model lives
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
