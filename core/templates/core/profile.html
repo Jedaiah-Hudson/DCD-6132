@@ -1,5 +1,49 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <h1>Profile</h1>
-<p>Your profile information will show here.</p>
+<p>Enter your profile manually anytime, and optionally use PDF OCR to pre-fill fields.</p>
+
+<h2>Capability Profile</h2>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <p>{{ profile_form.capability_pdf.label_tag }} {{ profile_form.capability_pdf }}</p>
+    {% if profile_form.capability_pdf.errors %}
+    <p style="color: red;">{{ profile_form.capability_pdf.errors }}</p>
+    {% endif %}
+
+    <p>{{ profile_form.company_name.label_tag }} {{ profile_form.company_name }}</p>
+    <p>{{ profile_form.capability_summary.label_tag }} {{ profile_form.capability_summary }}</p>
+    <p>{{ profile_form.core_competencies.label_tag }} {{ profile_form.core_competencies }}</p>
+    <p>{{ profile_form.differentiators.label_tag }} {{ profile_form.differentiators }}</p>
+    <p>{{ profile_form.naics_codes.label_tag }} {{ profile_form.naics_codes }}</p>
+    <p>{{ profile_form.certifications.label_tag }} {{ profile_form.certifications }}</p>
+    <p>{{ profile_form.past_performance.label_tag }} {{ profile_form.past_performance }}</p>
+    <p>{{ profile_form.contact_name.label_tag }} {{ profile_form.contact_name }}</p>
+    <p>{{ profile_form.contact_email.label_tag }} {{ profile_form.contact_email }}</p>
+    <p>{{ profile_form.contact_phone.label_tag }} {{ profile_form.contact_phone }}</p>
+    <p>{{ profile_form.website.label_tag }} {{ profile_form.website }}</p>
+
+    <button type="submit" name="action" value="extract_ocr">Extract + Prefill from PDF</button>
+    <button type="submit" name="action" value="submit_profile">Submit Profile (No DB Save Yet)</button>
+</form>
+
+{% if ocr_error %}
+<p style="color: red;">{{ ocr_error }}</p>
+{% endif %}
+
+<p><strong>Last processed file:</strong> {% if processed_file_name %}{{ processed_file_name }}{% else %}None{% endif %}</p>
+
+{% if extracted_text %}
+<h3>Extracted Text</h3>
+<pre>{{ extracted_text }}</pre>
+{% endif %}
+
+<h3>Structured Data (Dictionary View)</h3>
+<pre>{{ structured_data_json }}</pre>
+
+{% if submitted_data %}
+<h3>Submitted Values (Confirmation)</h3>
+<pre>{% for key, value in submitted_data.items %}{{ key }}: {{ value }}
+{% endfor %}</pre>
+{% endif %}
 {% endblock %}
