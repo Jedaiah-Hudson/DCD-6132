@@ -76,6 +76,11 @@
   background: #333333;
 }
 
+.login-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
 .login-links {
   display: flex;
   justify-content: space-between;

@@ -1,19 +1,36 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
+
 function LoginPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = (e) => {
     e.preventDefault();
   
-    if (!email.trim() || !password.trim()) {
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+  
+    if (!trimmedEmail || !trimmedPassword) {
       alert('Please enter both email and password.');
       return;
     }
   
-    alert('Login clicked');
+    if (!trimmedEmail.includes('@')) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+  
+    setLoading(true);
+  
+    setTimeout(() => {
+      alert("Login successful");
+      setLoading(false);
+    }, 1000);
   };
   
   return (
@@ -44,17 +61,19 @@ function LoginPage() {
             />
           </div>
 
-          <button type="submit" className="login-button">
-            Login
+          <button type="submit" className="login-button" disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
           </button>
-
+ 
           <div className="login-links">
-            <button type="button" className="text-button">
+            <button type="button" className="text-button" onClick={() => navigate('/create-account')}>
               Create Account
             </button>
-            <button type="button" className="text-button">
-              Forgot Password?
+            
+            <button type="button" className="text-button" onClick={() => navigate('/reset-password')}>
+              Reset Password
             </button>
+
           </div>
         </form>
       </div>
