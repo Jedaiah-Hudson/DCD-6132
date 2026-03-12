@@ -1,5 +1,230 @@
 {% extends 'core/base.html' %}
+
 {% block content %}
-<h1>Dashboard</h1>
-<p>Home screen!</p>
+<style>
+    .dashboard-title {
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 26px 0;
+        color: #0f172a;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0 0 16px 0;
+        color: #0f172a;
+    }
+
+    .for-you-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        margin-bottom: 42px;
+    }
+
+    .contract-card {
+        background-color: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        padding: 24px 22px;
+        max-width: 735px;
+    }
+
+    .contract-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0 0 18px 0;
+        color: #0f172a;
+    }
+
+    .contract-line {
+        font-size: 16px;
+        color: #334155;
+        margin: 0 0 10px 0;
+    }
+
+    .contract-line .label {
+        font-weight: 400;
+        margin-right: 6px;
+    }
+
+    .contract-tag {
+        display: inline-block;
+        margin-top: 8px;
+        background-color: #172036;
+        color: white;
+        font-size: 14px;
+        font-weight: 700;
+        border-radius: 4px;
+        padding: 6px 12px;
+    }
+
+    .quick-browse-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(180px, 1fr));
+        gap: 30px;
+        margin-bottom: 40px;
+        max-width: 1020px;
+    }
+
+    .browse-card {
+        background-color: #f8fafc;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        padding: 28px 32px;
+        min-height: 110px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .browse-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0 0 16px 0;
+        color: #0f172a;
+    }
+
+    .browse-subtext {
+        font-size: 16px;
+        color: #64748b;
+        margin: 0;
+    }
+
+    .history-table-wrap {
+        max-width: 1020px;
+        overflow-x: auto;
+    }
+
+    .history-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background-color: white;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .history-table thead th {
+        background-color: #e5e7eb;
+        text-align: left;
+        padding: 22px 30px;
+        font-size: 16px;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .history-table tbody td {
+        padding: 24px 30px;
+        font-size: 16px;
+        color: #1e293b;
+        border-top: 1px solid #e5e7eb;
+        background-color: #ffffff;
+    }
+
+    @media (max-width: 1100px) {
+        .quick-browse-grid {
+            grid-template-columns: repeat(2, minmax(180px, 1fr));
+        }
+    }
+
+    @media (max-width: 700px) {
+        .quick-browse-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .contract-card {
+            max-width: 100%;
+        }
+    }
+</style>
+
+<h1 class="dashboard-title">Dashboard</h1>
+
+<section>
+    <h2 class="section-title">For You</h2>
+
+    <div class="for-you-list">
+        <div class="contract-card">
+            <h3 class="contract-title">Cybersecurity Infrastructure Enhancement</h3>
+            <p class="contract-line"><span class="label">Agency:</span> Department of Defense</p>
+            <p class="contract-line"><span class="label">NAICS Code:</span> 541512</p>
+            <p class="contract-line"><span class="label">Due Date:</span> March 15, 2026</p>
+            <span class="contract-tag">Prime</span>
+        </div>
+
+        <div class="contract-card">
+            <h3 class="contract-title">Medical Equipment Manufacturing Contract</h3>
+            <p class="contract-line"><span class="label">Agency:</span> Department of Health &amp; Human Services</p>
+            <p class="contract-line"><span class="label">NAICS Code:</span> 339112</p>
+            <p class="contract-line"><span class="label">Due Date:</span> March 22, 2026</p>
+            <span class="contract-tag">Prime</span>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2 class="section-title">Quick Browse</h2>
+
+    <div class="quick-browse-grid">
+        <div class="browse-card">
+            <h3 class="browse-title">Cybersecurity</h3>
+            <p class="browse-subtext">24 opportunities</p>
+        </div>
+
+        <div class="browse-card">
+            <h3 class="browse-title">Manufacturing</h3>
+            <p class="browse-subtext">18 opportunities</p>
+        </div>
+
+        <div class="browse-card">
+            <h3 class="browse-title">Industrial</h3>
+            <p class="browse-subtext">15 opportunities</p>
+        </div>
+
+        <div class="browse-card">
+            <h3 class="browse-title">Healthcare</h3>
+            <p class="browse-subtext">21 opportunities</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2 class="section-title">Recent Contract History</h2>
+
+    <div class="history-table-wrap">
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>Agency</th>
+                    <th>NAICS</th>
+                    <th>Category</th>
+                    <th>Due Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Department of Defense</td>
+                    <td>541512</td>
+                    <td>Prime</td>
+                    <td>Feb 28, 2026</td>
+                </tr>
+                <tr>
+                    <td>GSA</td>
+                    <td>541611</td>
+                    <td>Subcontract</td>
+                    <td>Feb 25, 2026</td>
+                </tr>
+                <tr>
+                    <td>Department of Energy</td>
+                    <td>221114</td>
+                    <td>Partnership</td>
+                    <td>Feb 20, 2026</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
 {% endblock %}
