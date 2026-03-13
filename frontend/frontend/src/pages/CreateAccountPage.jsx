@@ -8,7 +8,7 @@ function CreateAccountPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleCreateAccount = (e) => {
+  const handleCreateAccount = async (e) => {
     e.preventDefault();
   
     const trimmedEmail = email.trim();
@@ -49,8 +49,30 @@ function CreateAccountPage() {
       return;
     }
   
-    alert('Account created successfully. Please log in.');
-    navigate('/');
+    try {
+      const response = await fetch('http://127.0.0.1:8000/accounts/signup/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password: trimmedPassword,
+        }),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        alert(data.message || 'Account creation failed.');
+        return;
+      }
+  
+      alert(data.message || 'Account created successfully!');
+      navigate('/');
+    } catch (error) {
+      alert('Could not connect to the server.');
+    }
   };
 
   return (

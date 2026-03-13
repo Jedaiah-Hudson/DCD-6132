@@ -9,7 +9,7 @@ function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
   
     const trimmedEmail = email.trim();
@@ -27,10 +27,36 @@ function LoginPage() {
   
     setLoading(true);
   
-    setTimeout(() => {
-      alert("Login successful");
+    try {
+      const response = await fetch('http://127.0.0.1:8000/accounts/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password: trimmedPassword,
+        }),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        alert(data.message || 'Login failed.');
+        setLoading(false);
+        return;
+      }
+  
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('userEmail', data.user.email);
+  
+      alert(data.message || 'Login successful!');
       setLoading(false);
-    }, 1000);
+      navigate('/dashboard');
+    } catch (error) {
+      alert('Could not connect to the server.');
+      setLoading(false);
+    }
   };
   
   return (
