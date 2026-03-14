@@ -75,5 +75,4 @@ def signup_api(request):
     }, status=status.HTTP_201_CREATED)
 
 def signup_view(request):
-    return render(request, 'accounts/signup.html')
-
+    return render(request, 'accounts/signUp.html')
