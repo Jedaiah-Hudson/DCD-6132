@@ -24,7 +24,7 @@
     <p>{{ profile_form.website.label_tag }} {{ profile_form.website }}</p>
 
     <button type="submit" name="action" value="extract_ocr">Extract + Prefill from PDF</button>
-    <button type="submit" name="action" value="submit_profile">Submit Profile (No DB Save Yet)</button>
+    <button type="submit" name="action" value="submit_profile">{% if editing %}Update Profile{% else %}Save Profile{% endif %}</button>
 </form>
 
 {% if ocr_error %}
@@ -32,6 +32,14 @@
 {% endif %}
 
 <p><strong>Last processed file:</strong> {% if processed_file_name %}{{ processed_file_name }}{% else %}None{% endif %}</p>
+
+{% if success_message %}
+  <p style="color: green;">{{ success_message }}</p>
+{% endif %}
+
+{% if editing %}
+  <p><strong>Editing existing capability profile</strong></p>
+{% endif %}
 
 {% if extracted_text %}
 <h3>Extracted Text</h3>

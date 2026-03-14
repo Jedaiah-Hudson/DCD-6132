@@ -4,11 +4,12 @@ import re
 import pytesseract
 import pypdfium2 as pdfium
 
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.authtoken.models import Token
-from accounts.models import User
+from accounts.models import CapabilityProfile, User
 from .forms import CapabilityProfileForm
 
 
@@ -165,6 +166,8 @@ def profile(request):
     ocr_error = None
     submitted_data = None
     processed_file_name = None
+    success_message = None
+    existing_profile = CapabilityProfile.objects.filter(user=request.user).first()
 
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -199,13 +202,45 @@ def profile(request):
                     profile_form = CapabilityProfileForm()
 
         elif action == 'submit_profile':
-            profile_form = CapabilityProfileForm(request.POST, request.FILES)
-            if profile_form.is_valid():
-                structured_data = {
-                    key: profile_form.cleaned_data.get(key, '')
-                    for key in PROFILE_KEYS
-                }
-                submitted_data = structured_data.copy()
+                profile_form = CapabilityProfileForm(request.POST, request.FILES)
+
+                if profile_form.is_valid():
+                    capability_profile, created = CapabilityProfile.objects.get_or_create(
+                        user=request.user
+                    )
+
+                    for key in PROFILE_KEYS:
+                        setattr(capability_profile, key, profile_form.cleaned_data.get(key, ''))
+
+                    uploaded_file = request.FILES.get('capability_pdf')
+                    if uploaded_file:
+                        capability_profile.source_pdf = uploaded_file
+                        capability_profile.is_ocr_generated = True
+                        try:
+                            extracted_text = extract_text_from_pdf(uploaded_file)
+                            capability_profile.ocr_extracted_text = extracted_text
+                        except Exception:
+                            pass
+
+                    capability_profile.is_approved = True
+                    capability_profile.save()
+
+                    success_message = 'Capability profile saved successfully.'
+                    structured_data = {key: getattr(capability_profile, key, '') for key in PROFILE_KEYS}
+                    profile_form = CapabilityProfileForm(initial=structured_data)
+                else:
+                    structured_data = {
+                        key: request.POST.get(key, '')
+                        for key in PROFILE_KEYS
+                    }
+
+    else:
+        if existing_profile:
+            initial_data = {key: getattr(existing_profile, key, '') for key in PROFILE_KEYS}
+            profile_form = CapabilityProfileForm(initial=initial_data)
+        else:
+            profile_form = CapabilityProfileForm()
+
 
     return render(
         request,
@@ -219,5 +254,33 @@ def profile(request):
             'ocr_error': ocr_error,
             'submitted_data': submitted_data,
             'processed_file_name': processed_file_name,
+            'editing': bool(existing_profile),
+            'success_message': success_message,
         },
+    )
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def save_capability_profile(request):
+    capability_data = {
+        key: request.data.get(key, '')
+        for key in PROFILE_KEYS
+    }
+
+    profile, created = CapabilityProfile.objects.update_or_create(
+        user=request.user,
+        defaults=capability_data
+    )
+
+    profile.is_approved = True
+    profile.save()
+
+    return Response(
+        {
+            'success': True,
+            'message': 'Capability profile saved successfully.',
+            'profile_id': profile.id,
+            'created': created,
+        },
+        status=status.HTTP_200_OK
     )
