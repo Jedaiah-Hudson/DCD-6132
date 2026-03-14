@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Signup Test</title>
+</head>
+<body>
+    <h2>Sign Up</h2>
+    <form id="signupForm">
+        <label>Email:</label><br>
+        <input type="email" name="email" required><br><br>
+        <label>Password:</label><br>
+        <input type="password" name="password" required><br><br>
+        <button type="submit">Sign Up</button>
+    </form>
+
+    <p>Already have an account? <a href="/accounts/login-vis/">Login</a></p>
+
+    <p id="message"></p>
+
+    <script>
+        const form = document.getElementById('signupForm');
+        const msg = document.getElementById('message');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault(); // prevent regular form submission
+            const formData = new FormData(form);
+            const data = {
+                email: formData.get('email'),
+                password: formData.get('password')
+            };
+
+            try {
+                const response = await fetch('/accounts/signup/', {  // matches our API
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if(result.success){
+                    msg.style.color = 'green';
+                    msg.textContent = result.message + ' Token: ' + result.token;
+                    localStorage.setItem('token', result.token); // store token
+                    window.location.href = '/';
+                } else {
+                    msg.style.color = 'red';
+                    msg.textContent = result.message;
+                }
+            } catch (err) {
+                msg.style.color = 'red';
+                msg.textContent = 'Error connecting to server.';
+            }
+        });
+    </script>
+</body>
+</html>

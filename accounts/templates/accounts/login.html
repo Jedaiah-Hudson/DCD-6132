@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login Test</title>
+</head>
+<body>
+    <h2>Login</h2>
+    <form id="loginForm">
+        <label>Email:</label><br>
+        <input type="email" name="email" required><br><br>
+        <label>Password:</label><br>
+        <input type="password" name="password" required><br><br>
+        <button type="submit">Login</button>
+    </form>
+
+    <p>Don't have an account? <a href="/accounts/signup-vis/">Sign Up</a></p>
+
+    <p id="message"></p>
+
+    <script>
+        const form = document.getElementById('loginForm');
+        const msg = document.getElementById('message');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault(); // prevent regular form submission
+            const formData = new FormData(form);
+            const data = {
+                email: formData.get('email'),
+                password: formData.get('password')
+            };
+
+            try {
+                const response = await fetch('/accounts/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}' // only needed if using Django template
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if(result.success){
+                    localStorage.setItem('token', result.token);
+                    msg.style.color = 'green';
+                    msg.textContent = result.message + ' Token: ' + result.token;
+                    window.location.href = '/'; 
+                } else {
+                    msg.style.color = 'red';
+                    msg.textContent = result.message;
+                }
+            } catch (err) {
+                msg.style.color = 'red';
+                msg.textContent = 'Error connecting to server.';
+            }
+        });
+    </script>
+</body>
+</html>
