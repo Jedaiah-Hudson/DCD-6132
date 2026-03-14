@@ -1,8 +1,0 @@
-asgiref==3.11.1
-Django==6.0.2
-django-crispy-forms==2.4
-djangorestframework==3.16.1
-Pillow
-pypdfium2
-pytesseract
-sqlparse==0.5.5
