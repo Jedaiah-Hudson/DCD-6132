@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 import json
 import re
 import pytesseract
@@ -14,11 +15,13 @@ from .forms import CapabilityProfileForm
 
 
 # Create your views here.
+@login_required(login_url='/accounts/login-vis/')
 def dashboard(request):
     template_data = {'title': 'Dashboard'}
     return render(request, 'core/dashboard.html', {'template_data': template_data})
 
 
+@login_required(login_url='/accounts/login-vis/')
 def notifications(request):
     template_data = {'title': 'Notifications'}
     return render(request, 'core/notifications.html', {'template_data': template_data})
@@ -158,6 +161,7 @@ def parse_capability_text(text):
 
     return parsed
 
+@login_required(login_url='/accounts/login-vis/')
 def profile(request):
     template_data = {'title': 'Profile'}
     profile_form = CapabilityProfileForm()
@@ -214,7 +218,8 @@ def profile(request):
 
                     uploaded_file = request.FILES.get('capability_pdf')
                     if uploaded_file:
-                        capability_profile.source_pdf = uploaded_file
+                        if hasattr(capability_profile, 'source_pdf'):
+                            capability_profile.source_pdf = uploaded_file
                         capability_profile.is_ocr_generated = True
                         try:
                             extracted_text = extract_text_from_pdf(uploaded_file)

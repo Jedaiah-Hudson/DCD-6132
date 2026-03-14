@@ -6,9 +6,15 @@
 <body>
 
 <nav>
+    {% if user.is_authenticated %}
     <a href="/">Dashboard</a> |
     <a href="/notifications/">Notifications</a> |
-    <a href="/profile/">Profile</a>
+    <a href="/profile/">Profile</a> |
+    <a href="/accounts/logout/">Logout</a>
+    {% else %}
+    <a href="/accounts/login-vis/">Sign In</a> |
+    <a href="/accounts/signup-vis/">Sign Up</a>
+    {% endif %}
 </nav>
 
 <hr>

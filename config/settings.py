@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 import django
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -84,12 +85,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
+if DB_PASSWORD is None:
+    raise ImproperlyConfigured(
+        "DB_PASSWORD is not set. Export DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, and DB_PORT "
+        "before running Django with MySQL."
+    )
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': os.environ.get('DB_NAME', 'ai_matchmaking'),
         'USER': os.environ.get('DB_USER', 'capstone_user'),
-        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'PASSWORD': DB_PASSWORD,
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '3306'),
     }
