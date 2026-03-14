@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
+from unittest.mock import patch
 
 from accounts.models import AdditionalEmail, User
 
@@ -19,16 +20,18 @@ class LinkedEmailApiTests(APITestCase):
         self.auth_headers = {'HTTP_AUTHORIZATION': f'Token {self.token.key}'}
 
     def test_add_linked_email_success(self):
-        response = self.client.post(
-            '/accounts/linked-emails/',
-            {'email': '  NewEmail@Example.com  '},
-            format='json',
-            **self.auth_headers,
-        )
+        with patch('accounts.views.refresh_contracting_opportunities_for_user') as mock_refresh:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    '/accounts/linked-emails/',
+                    {'email': '  NewEmail@Example.com  '},
+                    format='json',
+                    **self.auth_headers,
+                )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['message'], 'Email added successfully.')
-        self.assertFalse(response.data['opportunities_refreshed'])
+        self.assertTrue(response.data['opportunities_refreshed'])
         self.assertEqual(response.data['email']['email'], 'newemail@example.com')
         self.assertTrue(
             AdditionalEmail.objects.filter(
@@ -36,6 +39,8 @@ class LinkedEmailApiTests(APITestCase):
                 email='newemail@example.com',
             ).exists()
         )
+        mock_refresh.assert_called_once()
+        self.assertEqual(mock_refresh.call_args[0][0].id, self.user.id)
 
     def test_invalid_email_rejected(self):
         response = self.client.post(
@@ -61,22 +66,39 @@ class LinkedEmailApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
             response.data['error'],
-            'This email is already linked to your account.',
+            'This email is already linked.',
         )
+
+    def test_duplicate_email_for_different_user_rejected_due_to_global_uniqueness(self):
+        AdditionalEmail.objects.create(user=self.other_user, email='shared@example.com')
+
+        response = self.client.post(
+            '/accounts/linked-emails/',
+            {'email': 'SHARED@example.com'},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], 'This email is already linked.')
 
     def test_remove_linked_email_success(self):
         linked_email = AdditionalEmail.objects.create(user=self.user, email='rm@example.com')
 
-        response = self.client.delete(
-            f'/accounts/linked-emails/{linked_email.id}/',
-            **self.auth_headers,
-        )
+        with patch('accounts.views.refresh_contracting_opportunities_for_user') as mock_refresh:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.delete(
+                    f'/accounts/linked-emails/{linked_email.id}/',
+                    **self.auth_headers,
+                )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['message'], 'Email removed successfully.')
         self.assertEqual(response.data['removed_id'], linked_email.id)
-        self.assertFalse(response.data['opportunities_refreshed'])
+        self.assertTrue(response.data['opportunities_refreshed'])
         self.assertFalse(AdditionalEmail.objects.filter(id=linked_email.id).exists())
+        mock_refresh.assert_called_once()
+        self.assertEqual(mock_refresh.call_args[0][0].id, self.user.id)
 
     def test_unauthorized_request_rejected(self):
         response = self.client.get('/accounts/linked-emails/')

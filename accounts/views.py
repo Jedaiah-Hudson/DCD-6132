@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.contrib.auth import authenticate, login as django_login
+from django.db import transaction
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -10,7 +11,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.authentication import TokenAuthentication
 from accounts.models import User
 from accounts.models import AdditionalEmail
-from .services import refresh_user_opportunities
+from .services import refresh_contracting_opportunities_for_user
 
 # Create your views here.
 
@@ -124,9 +125,9 @@ def linked_emails_api(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    if AdditionalEmail.objects.filter(user=request.user, email__iexact=normalized_email).exists():
+    if AdditionalEmail.objects.filter(email__iexact=normalized_email).exists():
         return Response(
-            {'error': 'This email is already linked to your account.'},
+            {'error': 'This email is already linked.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -135,7 +136,8 @@ def linked_emails_api(request):
         email=normalized_email,
         label=label,
     )
-    refreshed = refresh_user_opportunities(request.user)
+    user = request.user
+    transaction.on_commit(lambda: refresh_contracting_opportunities_for_user(user))
 
     return Response(
         {
@@ -145,7 +147,7 @@ def linked_emails_api(request):
                 'email': linked_email.email,
                 'label': linked_email.label,
             },
-            'opportunities_refreshed': refreshed,
+            'opportunities_refreshed': True,
         },
         status=status.HTTP_201_CREATED,
     )
@@ -162,13 +164,14 @@ def linked_email_detail_api(request, email_id):
     if not linked_email:
         return Response({'error': 'Linked email not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+    user = request.user
     linked_email.delete()
-    refreshed = refresh_user_opportunities(request.user)
+    transaction.on_commit(lambda: refresh_contracting_opportunities_for_user(user))
     return Response(
         {
             'message': 'Email removed successfully.',
             'removed_id': email_id,
-            'opportunities_refreshed': refreshed,
+            'opportunities_refreshed': True,
         },
         status=status.HTTP_200_OK,
     )
