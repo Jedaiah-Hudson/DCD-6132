@@ -83,13 +83,13 @@ class CapabilityProfile(models.Model):
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=50, blank=True)
     website = models.URLField(blank=True)
-    source_pdf = models.FileField(upload_to='capability_pdfs/', null=True, blank=True)
-    ocr_extracted_text = models.TextField(blank=True)
-    is_ocr_generated = models.BooleanField(default=False)
     is_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    is_ocr_generated = models.BooleanField(default=False)
+
+    ocr_extracted_text = models.TextField(blank=True, default='')
     def __str__(self):
         return self.company_name or f"Capability Profile {self.id}"
     
