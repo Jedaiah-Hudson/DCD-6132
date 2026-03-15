@@ -30,7 +30,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now) ## track when user joined
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-
+    ##adding frogoten info feilds
+    reset_token = models.CharField(max_length=255, blank=True, null=True) ## field to store password reset token
+    reset_token_expiration = models.DateTimeField(blank=True, null=True)
     objects = UserManager() ## use the custom user manager for creating users and superusers
 
     def set_password(self, raw_password):
@@ -63,13 +65,6 @@ class CapabilityProfile(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='capability_profiles'
-    )
-    selected_email = models.ForeignKey(
-        'AdditionalEmail',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
         related_name='capability_profiles'
     )
     company_name = models.CharField(max_length=255, blank=True)
