@@ -284,3 +284,79 @@ def save_capability_profile(request):
         },
         status=status.HTTP_200_OK
     )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_capability_profile(request):
+    profile = CapabilityProfile.objects.filter(user=request.user).first()
+
+    if not profile:
+        return Response(
+            {
+                'success': True,
+                'editing': False,
+                'processed_file_name': None,
+                'profile': {key: '' for key in PROFILE_KEYS},
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    profile_data = {
+        key: getattr(profile, key, '') or ''
+        for key in PROFILE_KEYS
+    }
+
+    return Response(
+        {
+            'success': True,
+            'editing': True,
+            'processed_file_name': profile.source_pdf.name if profile.source_pdf else None,
+            'profile': profile_data,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def extract_capability_profile(request):
+    uploaded_file = request.FILES.get('capability_pdf')
+
+    if not uploaded_file:
+        return Response(
+            {'success': False, 'message': 'Upload a PDF to run OCR.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not uploaded_file.name.lower().endswith('.pdf'):
+        return Response(
+            {'success': False, 'message': 'Please upload a PDF file.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        extracted_text = extract_text_from_pdf(uploaded_file)
+        parsed_data = parse_capability_text(extracted_text)
+
+        return Response(
+            {
+                'success': True,
+                'message': 'Fields extracted successfully.',
+                'processed_file_name': uploaded_file.name,
+                'profile': parsed_data,
+                'extracted_text': extracted_text,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    except pytesseract.TesseractNotFoundError:
+        return Response(
+            {'success': False, 'message': 'Tesseract is not installed or not in your PATH.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+    except Exception as exc:
+        return Response(
+            {'success': False, 'message': f'Failed to process PDF: {exc}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

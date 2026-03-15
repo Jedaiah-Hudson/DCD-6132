@@ -225,3 +225,12 @@
     color: #dc2626;
     font-weight: 600;
 }
+
+.icon-circle:hover,
+.profile-icon-circle:hover,
+.notifications-icon-circle:hover,
+.icon-placeholder:hover,
+.profile-icon-placeholder:hover,
+.notifications-icon-placeholder:hover {
+  opacity: 0.8;
+}

@@ -49,6 +49,9 @@ function LoginPage() {
   
       localStorage.setItem('token', data.token);
       localStorage.setItem('userEmail', data.user.email);
+      
+      console.log('login response:', data);
+      console.log('stored token:', localStorage.getItem('token'));
   
       alert(data.message || 'Login successful!');
       setLoading(false);
