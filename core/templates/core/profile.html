@@ -54,4 +54,130 @@
 <pre>{% for key, value in submitted_data.items %}{{ key }}: {{ value }}
 {% endfor %}</pre>
 {% endif %}
+
+<hr>
+<h2>Linked Emails</h2>
+<p>Add extra emails so opportunities can be compiled in one place.</p>
+
+<form id="linked-email-form">
+  <label for="linked-email-input">Additional Email</label>
+  <input id="linked-email-input" type="email" placeholder="name@example.com" required>
+  <button type="submit">Add Email</button>
+</form>
+
+<p id="linked-email-message"></p>
+<ul id="linked-email-list"></ul>
+
+<script>
+  (function () {
+    const token = localStorage.getItem('token');
+    const listEl = document.getElementById('linked-email-list');
+    const msgEl = document.getElementById('linked-email-message');
+    const formEl = document.getElementById('linked-email-form');
+    const inputEl = document.getElementById('linked-email-input');
+
+    const setMessage = (text, isError = false) => {
+      msgEl.textContent = text;
+      msgEl.style.color = isError ? 'red' : 'green';
+    };
+
+    const authHeaders = () => ({
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${token}`,
+    });
+
+    const renderEmails = (emails) => {
+      listEl.innerHTML = '';
+      if (!emails.length) {
+        const li = document.createElement('li');
+        li.textContent = 'No linked emails yet.';
+        listEl.appendChild(li);
+        return;
+      }
+
+      emails.forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = item.email + ' ';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', async () => {
+          try {
+            const response = await fetch(`/accounts/linked-emails/${item.id}/`, {
+              method: 'DELETE',
+              headers: authHeaders(),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              setMessage(data.error || 'Failed to remove linked email.', true);
+              return;
+            }
+            setMessage(data.message || 'Email removed successfully.');
+            loadEmails();
+          } catch (err) {
+            setMessage('Could not connect to server.', true);
+          }
+        });
+
+        li.appendChild(removeBtn);
+        listEl.appendChild(li);
+      });
+    };
+
+    const loadEmails = async () => {
+      if (!token) {
+        setMessage('Please log in first to manage linked emails.', true);
+        return;
+      }
+      try {
+        const response = await fetch('/accounts/linked-emails/', {
+          headers: authHeaders(),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || 'Failed to load linked emails.', true);
+          return;
+        }
+        renderEmails(data.emails || []);
+      } catch (err) {
+        setMessage('Could not connect to server.', true);
+      }
+    };
+
+    formEl.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!token) {
+        setMessage('Please log in first to manage linked emails.', true);
+        return;
+      }
+
+      const email = inputEl.value.trim();
+      if (!email) {
+        setMessage('Invalid email format.', true);
+        return;
+      }
+
+      try {
+        const response = await fetch('/accounts/linked-emails/', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ email }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || 'Failed to add linked email.', true);
+          return;
+        }
+        inputEl.value = '';
+        setMessage(data.message || 'Email added successfully.');
+        loadEmails();
+      } catch (err) {
+        setMessage('Could not connect to server.', true);
+      }
+    });
+
+    loadEmails();
+  })();
+</script>
 {% endblock %}

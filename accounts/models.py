@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.contrib.auth.models import (
     AbstractBaseUser, PermissionsMixin, BaseUserManager
 )
+from django.db.models.functions import Lower
 
 from django.conf import settings
 # Create your models here.
@@ -50,14 +51,21 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class AdditionalEmail(models.Model):
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.CASCADE, 
-        related_name = 'additional_email') ## link to the user model
-    email = models.EmailField(unique=True) ## unique email field for additional emails
-    label = models.CharField(max_length=50, blank=True) ## optional label for the additional email
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='additional_email'
+    )
+    email = models.EmailField()
+    label = models.CharField(max_length=50, blank=True)
 
-    class Meta: 
-        unique_together = ('user', 'email') ## ensure that each email is unique for a given user
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                name='unique_lower_email_globally',
+            ),
+        ]
+        
     def __str__(self):
         return f"{self.user.email} - {self.label}" ## display the email and its label when printed
 
@@ -88,5 +96,4 @@ class CapabilityProfile(models.Model):
     def __str__(self):
         return self.company_name or f"Capability Profile {self.id}"
     
-
 
