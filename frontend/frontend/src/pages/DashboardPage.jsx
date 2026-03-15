@@ -1,4 +1,5 @@
 import './DashboardPage.css';
+import { useNavigate } from 'react-router-dom';
 
 const contracts = [
   {
@@ -67,16 +68,25 @@ const recentHistory = [
 ];
 
 function DashboardPage() {
+  const navigate = useNavigate();
   return (
     <div className="dashboard-layout">
       <aside className="sidebar">
         <h2 className="sidebar-title">AI Matchmaking Tool</h2>
 
         <nav className="sidebar-nav">
-          <button className="sidebar-link active">Dashboard</button>
-          <button className="sidebar-link">AI Matchmaking</button>
-          <button className="sidebar-link">Profile</button>
-          <button className="sidebar-link">Notifications</button>
+            <button className="sidebar-link active" onClick={() => navigate('/dashboard')}>
+                Dashboard
+            </button>
+            <button className="sidebar-link" onClick={() => navigate('/dashboard')}>
+                AI Matchmaking
+            </button>
+            <button className="sidebar-link" onClick={() => navigate('/profile')}>
+                Profile
+            </button>
+            <button className="sidebar-link" onClick={() => navigate('/notifications')}>
+                Notifications
+            </button>
         </nav>
       </aside>
 
@@ -89,8 +99,23 @@ function DashboardPage() {
               className="search-bar"
             />
             <div className="topbar-icons">
-              <span className="icon-circle">3</span>
-              <span className="icon-placeholder">👤</span>
+                <span
+                    className="profile-icon-circle"
+                    onClick={() => navigate('/notifications')}
+                    style={{ cursor: 'pointer' }}
+                    title="Notifications"
+                >
+                    3
+                </span>
+
+                <span
+                    className="profile-icon-placeholder"
+                    onClick={() => navigate('/profile')}
+                    style={{ cursor: 'pointer' }}
+                    title="Profile"
+                >
+                    👤
+                </span>
             </div>
           </div>
         </header>
