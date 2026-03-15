@@ -1,0 +1,227 @@
+.dashboard-layout {
+    display: flex;
+    min-height: 100vh;
+    background-color: #ffffff;
+    color: #111827;
+    font-family: Arial, sans-serif;
+}
+
+.sidebar {
+    width: 240px;
+    border-right: 1px solid #d9d9d9;
+    background-color: #f8f8f8;
+    padding: 24px 16px;
+    box-sizing: border-box;
+}
+
+.sidebar-title {
+    font-size: 1.9rem;
+    font-weight: 700;
+    margin-bottom: 32px;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.sidebar-link {
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 16px 14px;
+    border-radius: 10px;
+    font-size: 1rem;
+    color: #475569;
+    cursor: pointer;
+}
+
+.sidebar-link.active {
+    background-color: #ececec;
+    color: #111827;
+    font-weight: 600;
+}
+
+.dashboard-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-topbar {
+    height: 78px;
+    border-bottom: 1px solid #d9d9d9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+    box-sizing: border-box;
+}
+
+.dashboard-content {
+    padding: 36px 24px;
+}
+
+.dashboard-inner {
+    width: 100%;
+    max-width: 1060px;
+    margin: 0 auto;
+}
+
+.dashboard-topbar .dashboard-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.search-bar {
+    width: 500px;
+    max-width: 100%;
+    padding: 14px 18px;
+    border: 1px solid #cfd4dc;
+    border-radius: 8px;
+    font-size: 1rem;
+    background-color: #ffffff;
+}
+
+.search-bar:focus {
+    outline: none;
+    border-color: #bfc5ce;
+}
+
+.topbar-icons {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.icon-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: #ef4444;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.icon-placeholder {
+    font-size: 1.3rem;
+}
+
+.page-title {
+    font-size: 2.2rem;
+    margin-bottom: 28px;
+}
+
+.section {
+    margin-bottom: 36px;
+}
+
+.section-title {
+    font-size: 1.7rem;
+    margin-bottom: 18px;
+}
+
+.contract-list {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.contract-card {
+    background-color: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 26px 28px;
+}
+
+.contract-card h3 {
+    margin: 0 0 18px;
+    font-size: 1.25rem;
+}
+
+.contract-card p {
+    margin: 10px 0;
+    font-size: 1rem;
+}
+
+.contract-tag {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    background-color: #1e293b;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.browse-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 22px;
+}
+
+.browse-card {
+    background-color: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 28px;
+}
+
+.browse-card h3 {
+    margin: 0 0 12px;
+    font-size: 1.2rem;
+}
+
+.browse-card p {
+    margin: 0;
+    color: #475569;
+}
+
+.history-table-wrapper {
+    background-color: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.history-table thead {
+    background-color: #e5e7eb;
+}
+
+.history-table th,
+.history-table td {
+    text-align: left;
+    padding: 18px 24px;
+    border-bottom: 1px solid #d9d9d9;
+}
+
+.history-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.contract-card,
+.history-table-wrapper,
+.browse-card {
+    box-sizing: border-box;
+}
+
+.due-normal {
+    color: #374151;
+}
+  
+.due-soon {
+    color: #dc2626;
+    font-weight: 600;
+}
