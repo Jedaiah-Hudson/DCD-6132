@@ -100,7 +100,7 @@ function LoginPage() {
             </button>
             
             <button type="button" className="text-button" onClick={() => navigate('/reset-password')}>
-              Reset Password
+              Forgot Password
             </button>
 
           </div>

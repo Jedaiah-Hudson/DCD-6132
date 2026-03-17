@@ -20,6 +20,8 @@ from .serializers import PasswordResetConfirmSerializer
 from .serializers import PasswordResetRequestSerializer
 from .utils import generate_reset_token, get_reset_token_expiration, send_password_reset_email
 from .services import refresh_contracting_opportunities_for_user
+from django.conf import settings
+
 
 # Create your views here.
 
@@ -130,7 +132,7 @@ class PasswordResetRequestView(APIView):
         user.reset_token_expiration = expiration
         user.save(update_fields=["reset_token", "reset_token_expiration"])
 
-        reset_link = f"http://localhost:3000/reset-password?token={token}"
+        reset_link = f"{settings.FRONTEND_BASE_URL}/reset-password?token={token}"
         # replace localhost:3000 with your frontend URL later
 
         
