@@ -312,11 +312,15 @@ def get_capability_profile(request):
         for key in PROFILE_KEYS
     }
 
+    processed_file_name = None
+    if hasattr(profile, 'source_pdf') and profile.source_pdf:
+        processed_file_name = profile.source_pdf.name
+
     return Response(
         {
             'success': True,
             'editing': True,
-            'processed_file_name': profile.source_pdf.name if profile.source_pdf else None,
+            'processed_file_name': processed_file_name,
             'profile': profile_data,
         },
         status=status.HTTP_200_OK,
