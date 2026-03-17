@@ -133,7 +133,7 @@ class PasswordResetRequestView(APIView):
         reset_link = f"http://localhost:3000/reset-password?token={token}"
         # replace localhost:3000 with your frontend URL later
 
-        # Placeholder for now:
+        
         send_password_reset_email(user, reset_link)
 
         return Response(
