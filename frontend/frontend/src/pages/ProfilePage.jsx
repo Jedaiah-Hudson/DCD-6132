@@ -76,7 +76,7 @@ function ProfilePage() {
           return;
         }
 
-        fillProfileFields(data.profile || {});
+        fillProfileFields(data.profile || data || {});
         setEditing(Boolean(data.editing));
         setLastProcessedFile(data.processed_file_name || 'None');
       } catch (error) {
@@ -124,7 +124,7 @@ function ProfilePage() {
         return;
       }
 
-      fillProfileFields(data.profile || {});
+      fillProfileFields(data.profile || data || {});
       setLastProcessedFile(data.processed_file_name || 'None');
       setExtractedText(data.extracted_text || '');
       setSuccessMessage(data.message || 'Fields extracted successfully.');
