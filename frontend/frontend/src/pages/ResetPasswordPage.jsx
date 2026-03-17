@@ -51,20 +51,25 @@ function ResetPasswordPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/accounts/forgot-password/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: trimmedEmail }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Failed to send reset link.');
-      }
-
+        const response = await fetch('http://127.0.0.1:8000/accounts/forgot-password/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: trimmedEmail }),
+          });
+          
+          const raw = await response.text();
+          let data = {};
+          
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            throw new Error('Server error while sending reset email.');
+          }
+          
+          if (!response.ok) {
+            throw new Error(data.error || data.message || 'Failed to send reset link.');
+          }
+          
       setMessage(data.message || 'If an account with that email exists, a reset link has been sent.');
 
       // dev only: useful while email sending is still placeholder
