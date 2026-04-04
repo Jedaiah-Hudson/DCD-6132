@@ -4,14 +4,19 @@ import json
 import re
 import pytesseract
 import pypdfium2 as pdfium
+from django.db.models import Q
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
+from rest_framework.views import APIView
 from accounts.models import CapabilityProfile, User
 from .forms import CapabilityProfileForm
+from .models import Opportunity
+from .serializers import OpportunitySerializer
 
 
 # Create your views here.
@@ -369,3 +374,43 @@ def extract_capability_profile(request):
             {'success': False, 'message': f'Failed to process PDF: {exc}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+class OpportunityListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        opportunities = Opportunity.objects.all()
+
+        naics_code = (request.query_params.get('naics_code') or '').strip()
+        search = (request.query_params.get('search') or '').strip()
+        match_user = (request.query_params.get('match_user') or '').strip().lower() == 'true'
+
+        if naics_code:
+            opportunities = opportunities.filter(naics_code=naics_code)
+
+        if search:
+            opportunities = opportunities.filter(
+                Q(title__icontains=search) | Q(description__icontains=search)
+            )
+
+        if match_user:
+            if not request.user.is_authenticated:
+                return Response(
+                    {'detail': 'Authentication credentials were not provided.'},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            profile = CapabilityProfile.objects.filter(user=request.user).first()
+            if not profile or not profile.naics_codes.strip():
+                return Response([], status=status.HTTP_200_OK)
+
+            user_naics_codes = [
+                code.strip()
+                for code in re.split(r'[\s,;\n]+', profile.naics_codes)
+                if code.strip()
+            ]
+            opportunities = opportunities.filter(naics_code__in=user_naics_codes)
+
+        serializer = OpportunitySerializer(opportunities, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
