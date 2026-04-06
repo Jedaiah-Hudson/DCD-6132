@@ -27,16 +27,17 @@ If you want to run:
 python manage.py runserver
 
 
+
 How to Run the Frontend (React)
 
-Navigate to the frontend folder
+1. Navigate to the frontend folder
 cd frontend/frontend 
 
-Install dependencies
+2. Install dependencies
 npm install 
-This installs all required packages.
+(This installs all required packages.)
 
-Start the development server
+3. Start the development server
 npm run dev 
 
 
