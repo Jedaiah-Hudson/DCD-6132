@@ -172,31 +172,31 @@ function DashboardPage() {
     setActiveNoteId(null);
   };
 
-  const handleDeleteContract = (contractId) => {
-    const confirmDelete = window.confirm(
-      'Are you sure you want to delete this contract? This action cannot be undone.'
+  const handleNotInterested = (contractId) => {
+    const confirmRemove = window.confirm(
+      'Mark this contract as not interested and remove it from your view?'
     );
-  
-    if (!confirmDelete) return;
-  
+
+    if (!confirmRemove) return;
+
     setContracts((currentContracts) =>
       currentContracts.filter((contract) => contract.id !== contractId)
     );
-  
+
     if (selectedContractId === contractId) {
       setSelectedContractId(null);
     }
-  
+
     if (activeNoteId === contractId) {
       setActiveNoteId(null);
     }
-  
+
     setDraftNotes((currentDrafts) => {
       const updatedDrafts = { ...currentDrafts };
       delete updatedDrafts[contractId];
       return updatedDrafts;
     });
-  
+
     if (hoveredId === contractId) {
       setHoveredId(null);
     }
@@ -415,10 +415,10 @@ function DashboardPage() {
                             {contract.notes ? 'Edit Note' : 'Add Note'}
                           </button>
                           <button
-                            className="delete-contract-button"
-                            onClick={() => handleDeleteContract(contract.id)}
+                            className="not-interested-button"
+                            onClick={() => handleNotInterested(contract.id)}
                           >
-                            Delete
+                            Not Interested
                           </button>
                         </div>
                       </div>
@@ -564,6 +564,15 @@ function DashboardPage() {
             <p>
               <strong>Notes:</strong> {selectedContract.notes || 'No notes available.'}
             </p>
+
+            <div className="modal-action-row">
+              <button
+                className="not-interested-button"
+                onClick={() => handleNotInterested(selectedContract.id)}
+              >
+                Not Interested
+              </button>
+            </div>
           </div>
         </div>
       )}
