@@ -2,6 +2,20 @@ import { useEffect, useState } from 'react';
 import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
 
+const defaultMailboxConnections = [
+  {
+    id: 1,
+    provider: 'Gmail',
+    email: 'contracts@pinkstem.org',
+    status: 'Connected',
+  },
+  {
+    id: 2,
+    provider: 'Outlook',
+    email: 'opportunities@pinkstem.org',
+    status: 'Needs attention',
+  },
+];
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -26,6 +40,7 @@ function ProfilePage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [editing, setEditing] = useState(false);
   const [extractedText, setExtractedText] = useState('');
+  const [mailboxConnections, setMailboxConnections] = useState(defaultMailboxConnections);
 
   const token = localStorage.getItem('token');
 
@@ -168,24 +183,55 @@ function ProfilePage() {
     }
   };
 
+  const handleConnectMailbox = (provider) => {
+    const defaultEmail = provider === 'Gmail'
+      ? 'new.gmail.connection@example.com'
+      : 'new.outlook.connection@example.com';
+
+    setMailboxConnections((currentConnections) => {
+      const existingConnection = currentConnections.find((connection) => connection.provider === provider);
+
+      if (existingConnection) {
+        return currentConnections.map((connection) => (
+          connection.provider === provider
+            ? { ...connection, status: 'Connected' }
+            : connection
+        ));
+      }
+
+      return [
+        ...currentConnections,
+        {
+          id: Date.now(),
+          provider,
+          email: defaultEmail,
+          status: 'Connected',
+        },
+      ];
+    });
+
+    setSuccessMessage(`${provider} mailbox connected.`);
+    setUploadError('');
+  };
+
   return (
     <div className="profile-layout">
       <aside className="profile-sidebar">
         <h2 className="profile-sidebar-title">AI Matchmaking Tool</h2>
 
         <nav className="profile-sidebar-nav">
-            <button className="profile-sidebar-link" onClick={() => navigate('/dashboard')}>
-                Dashboard
-            </button>
-            <button className="profile-sidebar-link" onClick={() => navigate('/dashboard')}>
-                AI Matchmaking
-            </button>
-            <button className="profile-sidebar-link active" onClick={() => navigate('/profile')}>
-                Profile
-            </button>
-            <button className="profile-sidebar-link" onClick={() => navigate('/notifications')}>
-                Notifications
-            </button>
+          <button className="profile-sidebar-link" onClick={() => navigate('/dashboard')}>
+            Dashboard
+          </button>
+          <button className="profile-sidebar-link" onClick={() => navigate('/dashboard')}>
+            AI Matchmaking
+          </button>
+          <button className="profile-sidebar-link active" onClick={() => navigate('/profile')}>
+            Profile
+          </button>
+          <button className="profile-sidebar-link" onClick={() => navigate('/notifications')}>
+            Notifications
+          </button>
         </nav>
       </aside>
 
@@ -198,23 +244,23 @@ function ProfilePage() {
               className="profile-search-bar"
             />
             <div className="profile-topbar-icons">
-                <span
-                    className="profile-icon-circle"
-                    onClick={() => navigate('/notifications')}
-                    style={{ cursor: 'pointer' }}
-                    title="Notifications"
-                >
-                    3
-                </span>
+              <span
+                className="profile-icon-circle"
+                onClick={() => navigate('/notifications')}
+                style={{ cursor: 'pointer' }}
+                title="Notifications"
+              >
+                3
+              </span>
 
-                <span
-                    className="profile-icon-placeholder"
-                    onClick={() => navigate('/profile')}
-                    style={{ cursor: 'pointer' }}
-                    title="Profile"
-                >
-                    👤
-                </span>
+              <span
+                className="profile-icon-placeholder"
+                onClick={() => navigate('/profile')}
+                style={{ cursor: 'pointer' }}
+                title="Profile"
+              >
+                👤
+              </span>
             </div>
           </div>
         </header>
@@ -229,6 +275,43 @@ function ProfilePage() {
             {uploadError && <p className="profile-error-message">{uploadError}</p>}
             {successMessage && <p className="profile-success-message">{successMessage}</p>}
             {editing && <p className="profile-editing-message">Editing existing capability profile</p>}
+
+            <section className="profile-section-card">
+              <h2 className="profile-section-title">Mailbox Connections</h2>
+              <p className="profile-section-description">
+                Connect Gmail or Outlook mailboxes to pull in opportunity emails and manage mailbox status.
+              </p>
+
+              <div className="profile-button-row">
+                <button
+                  className="profile-dark-button"
+                  onClick={() => handleConnectMailbox('Gmail')}
+                >
+                  Connect Gmail
+                </button>
+
+                <button
+                  className="profile-light-button"
+                  onClick={() => handleConnectMailbox('Outlook')}
+                >
+                  Connect Outlook
+                </button>
+              </div>
+
+              <div className="mailbox-list">
+                {mailboxConnections.map((mailbox) => (
+                  <div key={mailbox.id} className="mailbox-card">
+                    <div>
+                      <h3 className="mailbox-provider">{mailbox.provider}</h3>
+                      <p className="mailbox-email">{mailbox.email}</p>
+                    </div>
+                    <span className={`mailbox-status ${mailbox.status === 'Connected' ? 'mailbox-status-connected' : 'mailbox-status-warning'}`}>
+                      {mailbox.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
 
             <section className="profile-section-card">
               <h2 className="profile-section-title">Capability Documents</h2>
