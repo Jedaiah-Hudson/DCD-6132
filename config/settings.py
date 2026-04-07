@@ -122,3 +122,39 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+<<<<<<< HEAD
+=======
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+}
+##email settings
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+
+# MSAL Configuration for Outlook OAuth
+MSAL_CONFIG = {
+    'client_id': os.getenv("MSAL_CLIENT_ID"),
+    'client_secret': os.getenv("MSAL_CLIENT_SECRET"),
+    'authority': 'https://login.microsoftonline.com/common',  # For multi-tenant apps
+    'redirect_uri': 'http://localhost:8000/accounts/outlook/callback/',  # Must match Azure redirect URI
+    'scope': ['https://graph.microsoft.com/Mail.Read', 'https://graph.microsoft.com/User.Read'],  # Scopes for mail and user info
+}
+
+print("EMAIL_HOST_USER:", EMAIL_HOST_USER)
+print("DEFAULT_FROM_EMAIL:", DEFAULT_FROM_EMAIL)
+>>>>>>> 057d3f8 (fixed MSAL Config)
