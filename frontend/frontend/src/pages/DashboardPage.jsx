@@ -7,53 +7,69 @@ const initialContracts = [
     id: 1,
     title: 'Cybersecurity Infrastructure Enhancement',
     agency: 'Department of Defense',
+    subAgency: 'Defense Information Systems Agency',
     naics: '541512',
     dueDate: 'March 15, 2026',
     category: 'Prime',
     partner: 'Northwind Systems',
+    senderCompany: 'Northwind Systems',
     source: 'Email',
+    hyperlink: 'https://example.com/cybersecurity-infrastructure-enhancement',
     status: 'Reviewing',
     notes: 'Strong match for existing cybersecurity experience.',
-    summary: 'Enhance cybersecurity infrastructure across multiple defense systems, focusing on threat detection and system resilience.',
+    summary:
+      'Enhance cybersecurity infrastructure across multiple defense systems, focusing on threat detection and system resilience.',
   },
   {
     id: 2,
     title: 'Medical Equipment Manufacturing Contract',
     agency: 'Department of Health & Human Services',
+    subAgency: 'Office of the Assistant Secretary for Preparedness and Response',
     naics: '339112',
     dueDate: 'March 22, 2026',
     category: 'Subcontract',
     partner: 'Apex Health Manufacturing',
+    senderCompany: 'Apex Health Manufacturing',
     source: 'Procurement',
+    hyperlink: 'https://example.com/medical-equipment-manufacturing-contract',
     status: 'Not Started',
     notes: '',
-    summary: 'Manufacture and supply medical equipment for federal healthcare programs with strict compliance requirements.',
+    summary:
+      'Manufacture and supply medical equipment for federal healthcare programs with strict compliance requirements.',
   },
   {
     id: 3,
     title: 'Industrial Equipment Maintenance Services',
     agency: 'General Services Administration',
+    subAgency: 'Public Buildings Service',
     naics: '811310',
     dueDate: 'April 5, 2026',
     category: 'Prime',
     partner: 'Atlas Industrial Group',
+    senderCompany: 'Atlas Industrial Group',
     source: 'Procurement',
+    hyperlink: 'https://example.com/industrial-equipment-maintenance-services',
     status: 'Submitted',
     notes: 'Follow up on required maintenance certifications.',
-    summary: 'Provide ongoing maintenance and repair services for industrial equipment across federal facilities.',
+    summary:
+      'Provide ongoing maintenance and repair services for industrial equipment across federal facilities.',
   },
   {
     id: 4,
     title: 'Healthcare IT System Implementation',
     agency: 'Veterans Affairs',
+    subAgency: 'Veterans Health Administration',
     naics: '541519',
     dueDate: 'April 12, 2026',
     category: 'Prime',
     partner: 'Northwind Systems',
+    senderCompany: 'Northwind Systems',
     source: 'Email',
+    hyperlink: 'https://example.com/healthcare-it-system-implementation',
     status: 'Drafting',
     notes: '',
-    summary: 'Implement and integrate healthcare IT systems to improve patient data management and operational efficiency.',
+    summary:
+      'Implement and integrate healthcare IT systems to improve patient data management and operational efficiency.',
   },
 ];
 
@@ -93,6 +109,7 @@ const statusOptions = ['Not Started', 'Reviewing', 'Drafting', 'Submitted'];
 function DashboardPage() {
   const navigate = useNavigate();
   const [hoveredId, setHoveredId] = useState(null);
+  const [selectedContractId, setSelectedContractId] = useState(null);
   const [contracts, setContracts] = useState(initialContracts);
   const [selectedPartner, setSelectedPartner] = useState('All Partners');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -113,6 +130,9 @@ function DashboardPage() {
 
     return contracts.filter((contract) => contract.partner === selectedPartner);
   }, [contracts, selectedPartner]);
+
+  const selectedContract =
+    filteredContracts.find((contract) => contract.id === selectedContractId) || null;
 
   const handleSyncContracts = () => {
     setIsSyncing(true);
@@ -271,32 +291,46 @@ function DashboardPage() {
 
               <div className="contract-list">
                 {filteredContracts.map((contract) => (
-                  <div key={contract.id} className="contract-card">
+                  <div
+                    key={contract.id}
+                    className={`contract-card ${
+                      selectedContractId === contract.id ? 'selected-contract-card' : ''
+                    }`}
+                    onClick={() => setSelectedContractId(contract.id)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <div className="card-heading-row">
                       <div>
-                      <div className="title-row">
-                        <h3>{contract.title}</h3>
+                        <div className="title-row">
+                          <h3>{contract.title}</h3>
 
-                        <span
-                          className="summary-button"
-                          onMouseEnter={() => setHoveredId(contract.id)}
-                          onMouseLeave={() => setHoveredId(null)}
-                        >
-                          View Summary
-                        </span>
-                      </div>
-                      {hoveredId === contract.id && (
-                        <div className="summary-popup">
-                          {contract.summary}
+                          <span
+                            className="summary-button"
+                            onMouseEnter={() => setHoveredId(contract.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            View Summary
+                          </span>
                         </div>
-                      )}
+
+                        {hoveredId === contract.id && (
+                          <div className="summary-popup">
+                            {contract.summary}
+                          </div>
+                        )}
+
                         <div className="card-meta-row">
                           <span className={getSourceClassName(contract.source)}>{contract.source}</span>
                           <span className="partner-pill">Partner: {contract.partner}</span>
                           <span className="contract-tag">{contract.category}</span>
                         </div>
                       </div>
-                      <div className="contract-status-block">
+
+                      <div
+                        className="contract-status-block"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <label htmlFor={`status-${contract.id}`} className="status-label">
                           Status
                         </label>
@@ -326,7 +360,10 @@ function DashboardPage() {
                       <strong>Due Date:</strong> {contract.dueDate}
                     </p>
 
-                    <div className="notes-section">
+                    <div
+                      className="notes-section"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <div className="notes-header-row">
                         <h4 className="notes-title">Notes</h4>
                         <button
@@ -417,6 +454,64 @@ function DashboardPage() {
           </div>
         </main>
       </div>
+
+      {selectedContract && (
+        <div
+          className="contract-modal-overlay"
+          onClick={() => setSelectedContractId(null)}
+        >
+          <div
+            className="contract-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="contract-modal-header">
+              <h2 className="section-title">Contract Details</h2>
+              <button
+                className="contract-modal-close"
+                onClick={() => setSelectedContractId(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            <h3 className="expanded-contract-title">{selectedContract.title}</h3>
+
+            <p>
+              <strong>Summary:</strong> {selectedContract.summary}
+            </p>
+            <p>
+              <strong>Sender/Company:</strong> {selectedContract.senderCompany}
+            </p>
+            <p>
+              <strong>Deadline:</strong> {selectedContract.dueDate}
+            </p>
+            <p>
+              <strong>Agency:</strong> {selectedContract.agency}
+            </p>
+            <p>
+              <strong>Sub-Agency:</strong> {selectedContract.subAgency}
+            </p>
+            <p>
+              <strong>NAICS Code:</strong> {selectedContract.naics}
+            </p>
+            <p>
+              <strong>Source:</strong> {selectedContract.source}
+            </p>
+            <p>
+              <strong>Hyperlink:</strong>{' '}
+              <a href={selectedContract.hyperlink} target="_blank" rel="noreferrer">
+                View Opportunity
+              </a>
+            </p>
+            <p>
+              <strong>Status:</strong> {selectedContract.status || 'N/A'}
+            </p>
+            <p>
+              <strong>Notes:</strong> {selectedContract.notes || 'No notes available.'}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
