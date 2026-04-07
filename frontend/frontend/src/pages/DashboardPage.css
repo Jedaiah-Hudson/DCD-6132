@@ -493,3 +493,33 @@
         grid-template-columns: 1fr;
     }
 }
+
+
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .summary-button {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #e5e7eb; /* light gray */
+    color: #374151; /* dark gray text */
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  
+  .summary-button:hover {
+    background: #d1d5db;
+  }
+  
+  .summary-popup {
+    margin-top: 8px;
+    padding: 10px;
+    background: #f5f5f5;
+    border-radius: 8px;
+    font-size: 14px;
+    max-width: 400px;
+  }

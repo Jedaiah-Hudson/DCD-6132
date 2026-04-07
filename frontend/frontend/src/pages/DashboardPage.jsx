@@ -14,6 +14,7 @@ const initialContracts = [
     source: 'Email',
     status: 'Reviewing',
     notes: 'Strong match for existing cybersecurity experience.',
+    summary: 'Enhance cybersecurity infrastructure across multiple defense systems, focusing on threat detection and system resilience.',
   },
   {
     id: 2,
@@ -26,6 +27,7 @@ const initialContracts = [
     source: 'Procurement',
     status: 'Not Started',
     notes: '',
+    summary: 'Manufacture and supply medical equipment for federal healthcare programs with strict compliance requirements.',
   },
   {
     id: 3,
@@ -38,6 +40,7 @@ const initialContracts = [
     source: 'Procurement',
     status: 'Submitted',
     notes: 'Follow up on required maintenance certifications.',
+    summary: 'Provide ongoing maintenance and repair services for industrial equipment across federal facilities.',
   },
   {
     id: 4,
@@ -50,6 +53,7 @@ const initialContracts = [
     source: 'Email',
     status: 'Drafting',
     notes: '',
+    summary: 'Implement and integrate healthcare IT systems to improve patient data management and operational efficiency.',
   },
 ];
 
@@ -88,6 +92,7 @@ const statusOptions = ['Not Started', 'Reviewing', 'Drafting', 'Submitted'];
 
 function DashboardPage() {
   const navigate = useNavigate();
+  const [hoveredId, setHoveredId] = useState(null);
   const [contracts, setContracts] = useState(initialContracts);
   const [selectedPartner, setSelectedPartner] = useState('All Partners');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -269,7 +274,22 @@ function DashboardPage() {
                   <div key={contract.id} className="contract-card">
                     <div className="card-heading-row">
                       <div>
+                      <div className="title-row">
                         <h3>{contract.title}</h3>
+
+                        <span
+                          className="summary-button"
+                          onMouseEnter={() => setHoveredId(contract.id)}
+                          onMouseLeave={() => setHoveredId(null)}
+                        >
+                          View Summary
+                        </span>
+                      </div>
+                      {hoveredId === contract.id && (
+                        <div className="summary-popup">
+                          {contract.summary}
+                        </div>
+                      )}
                         <div className="card-meta-row">
                           <span className={getSourceClassName(contract.source)}>{contract.source}</span>
                           <span className="partner-pill">Partner: {contract.partner}</span>
