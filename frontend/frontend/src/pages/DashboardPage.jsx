@@ -111,25 +111,67 @@ function DashboardPage() {
   const [hoveredId, setHoveredId] = useState(null);
   const [selectedContractId, setSelectedContractId] = useState(null);
   const [contracts, setContracts] = useState(initialContracts);
-  const [selectedPartner, setSelectedPartner] = useState('All Partners');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedNaics, setSelectedNaics] = useState('');
+  const [selectedAgency, setSelectedAgency] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
   const [lastSynced, setLastSynced] = useState('April 6, 2026 at 10:25 AM');
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [draftNotes, setDraftNotes] = useState({});
 
-  const partnerOptions = useMemo(() => {
-    const partners = Array.from(new Set(initialContracts.map((contract) => contract.partner)));
-    return ['All Partners', ...partners];
+  const getNaicsValues = (contract) => {
+    const rawNaicsValues = contract.naicsCodes ?? contract.naics_code ?? contract.naics ?? [];
+    const naicsValues = Array.isArray(rawNaicsValues) ? rawNaicsValues : [rawNaicsValues];
+
+    return naicsValues
+      .flatMap((value) => String(value).split(','))
+      .map((value) => value.trim())
+      .filter(Boolean);
+  };
+
+  const getSearchableText = (contract) => {
+    return [
+      contract.title,
+      contract.agency,
+      contract.description,
+      contract.partner,
+      ...getNaicsValues(contract),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+  };
+
+  const agencyOptions = useMemo(() => {
+    return Array.from(new Set(initialContracts.map((contract) => contract.agency))).sort();
+  }, []);
+
+  const naicsOptions = useMemo(() => {
+    return Array.from(
+      new Set(initialContracts.flatMap((contract) => getNaicsValues(contract)))
+    ).sort();
   }, []);
 
   const filteredContracts = useMemo(() => {
-    if (selectedPartner === 'All Partners') {
-      return contracts;
-    }
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedAgency = selectedAgency.trim().toLowerCase();
+    const normalizedStatus = selectedStatus.trim().toLowerCase();
 
-    return contracts.filter((contract) => contract.partner === selectedPartner);
-  }, [contracts, selectedPartner]);
+    return contracts.filter((contract) => {
+      const matchesAgency =
+        !normalizedAgency || contract.agency.toLowerCase() === normalizedAgency;
+      const matchesNaics =
+        !selectedNaics || getNaicsValues(contract).includes(selectedNaics);
+      const matchesSearch =
+        !normalizedQuery || getSearchableText(contract).includes(normalizedQuery);
+      const matchesStatus =
+        !normalizedStatus || contract.status.toLowerCase() === normalizedStatus;
+
+      return matchesAgency && matchesNaics && matchesSearch && matchesStatus;
+    });
+  }, [contracts, searchQuery, selectedAgency, selectedNaics, selectedStatus]);
 
   const selectedContract =
     contracts.find((contract) => contract.id === selectedContractId) || null;
@@ -246,7 +288,13 @@ function DashboardPage() {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <input type="text" placeholder="Search contracts..." className="search-bar" />
+            <input
+              type="text"
+              placeholder="Search contracts..."
+              className="search-bar"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
             <div className="topbar-icons">
               <span
                 className="profile-icon-circle"
@@ -298,23 +346,58 @@ function DashboardPage() {
               <div className="section-heading-row">
                 <div>
                   <h2 className="section-title">For You</h2>
-                  <p className="section-helper-text">
-                    Filter by partner and review source, notes, and contract status.
-                  </p>
+                  <p className="section-helper-text">Filter by agency and review source, notes, and contract status.</p>
                 </div>
                 <div className="filter-group">
-                  <label htmlFor="partnerFilter" className="filter-label">
-                    Partner
+                  <label htmlFor="agencyFilter" className="filter-label">
+                    Agency
                   </label>
                   <select
-                    id="partnerFilter"
+                    id="agencyFilter"
                     className="partner-filter"
-                    value={selectedPartner}
-                    onChange={(event) => setSelectedPartner(event.target.value)}
+                    value={selectedAgency}
+                    onChange={(event) => setSelectedAgency(event.target.value)}
                   >
-                    {partnerOptions.map((partner) => (
-                      <option key={partner} value={partner}>
-                        {partner}
+                    <option value="">All Agencies</option>
+                    {agencyOptions.map((agency) => (
+                      <option key={agency} value={agency}>
+                        {agency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <label htmlFor="naicsFilter" className="filter-label">
+                    NAICS
+                  </label>
+                  <select
+                    id="naicsFilter"
+                    className="partner-filter"
+                    value={selectedNaics}
+                    onChange={(event) => setSelectedNaics(event.target.value)}
+                  >
+                    <option value="">All NAICS Codes</option>
+                    {naicsOptions.map((naicsCode) => (
+                      <option key={naicsCode} value={naicsCode}>
+                        {naicsCode}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <label htmlFor="statusFilter" className="filter-label">
+                    Status
+                  </label>
+                  <select
+                    id="statusFilter"
+                    className="partner-filter"
+                    value={selectedStatus}
+                    onChange={(event) => setSelectedStatus(event.target.value)}
+                  >
+                    <option value="">All Statuses</option>
+                    {statusOptions.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
                       </option>
                     ))}
                   </select>
@@ -322,17 +405,18 @@ function DashboardPage() {
               </div>
 
               <div className="contract-list">
-                {filteredContracts.map((contract) => (
-                  <div
-                    key={contract.id}
-                    className={`contract-card ${
-                      selectedContractId === contract.id ? 'selected-contract-card' : ''
-                    }`}
-                    onClick={() => setSelectedContractId(contract.id)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="card-heading-row">
-                      <div>
+                {filteredContracts.length > 0 ? (
+                  filteredContracts.map((contract) => (
+                    <div
+                      key={contract.id}
+                      className={`contract-card ${
+                        selectedContractId === contract.id ? 'selected-contract-card' : ''
+                      }`}
+                      onClick={() => setSelectedContractId(contract.id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="card-heading-row">
+                        <div>
                         <div className="title-row">
                           <h3>{contract.title}</h3>
 
@@ -345,125 +429,124 @@ function DashboardPage() {
                             View Summary
                           </span>
                         </div>
-
                         {hoveredId === contract.id && (
                           <div className="summary-popup">
                             {contract.summary}
                           </div>
                         )}
-
-                        <div className="card-meta-row">
-                          <span className={getSourceClassName(contract.source)}>
-                            {contract.source}
+                          <div className="card-meta-row">
+                            <span className={getSourceClassName(contract.source)}>
+                              {contract.source}
+                            </span>
+                            <span className="partner-pill">Partner: {contract.partner}</span>
+                            <span className="contract-tag">{contract.category}</span>
+                          </div>
+                        </div>
+                        <div
+                          className="contract-status-block"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <label htmlFor={`status-${contract.id}`} className="status-label">
+                            Status
+                          </label>
+                          <select
+                            id={`status-${contract.id}`}
+                            className="status-select"
+                            value={contract.status}
+                            onChange={(event) =>
+                              handleStatusChange(contract.id, event.target.value)
+                            }
+                          >
+                            {statusOptions.map((status) => (
+                              <option key={status} value={status}>
+                                {status}
+                              </option>
+                            ))}
+                          </select>
+                          <span className={getStatusClassName(contract.status)}>
+                            {contract.status}
                           </span>
-                          <span className="partner-pill">Partner: {contract.partner}</span>
-                          <span className="contract-tag">{contract.category}</span>
                         </div>
                       </div>
+
+                      <p>
+                        <strong>Agency:</strong> {contract.agency}
+                      </p>
+                      <p>
+                        <strong>Sub-Agency:</strong> {contract.subAgency}
+                      </p>
+                      <p>
+                        <strong>NAICS Code:</strong> {getNaicsValues(contract).join(', ')}
+                      </p>
+                      <p>
+                        <strong>Due Date:</strong> {contract.dueDate}
+                      </p>
+                      <p>
+                        <strong>Source:</strong> {contract.source}
+                      </p>
 
                       <div
-                        className="contract-status-block"
+                        className="notes-section"
                         onClick={(event) => event.stopPropagation()}
                       >
-                        <label htmlFor={`status-${contract.id}`} className="status-label">
-                          Status
-                        </label>
-                        <select
-                          id={`status-${contract.id}`}
-                          className="status-select"
-                          value={contract.status}
-                          onChange={(event) =>
-                            handleStatusChange(contract.id, event.target.value)
-                          }
-                        >
-                          {statusOptions.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                        <span className={getStatusClassName(contract.status)}>
-                          {contract.status}
-                        </span>
-                      </div>
-                    </div>
-
-                    <p>
-                      <strong>Agency:</strong> {contract.agency}
-                    </p>
-                    <p>
-                      <strong>NAICS Code:</strong> {contract.naics}
-                    </p>
-                    <p>
-                      <strong>Due Date:</strong> {contract.dueDate}
-                    </p>
-                    <p>
-                      <strong>Source:</strong> {contract.source}
-                    </p>
-
-                    <div
-                      className="notes-section"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="notes-header-row">
-                        <h4 className="notes-title">Notes</h4>
-                        <div className="contract-action-buttons">
-                          <button
-                            className="note-action-button"
-                            onClick={() => handleOpenNotes(contract)}
-                          >
-                            {contract.notes ? 'Edit Note' : 'Add Note'}
-                          </button>
-                          <button
-                            className="not-interested-button"
-                            onClick={() => handleNotInterested(contract.id)}
-                          >
-                            Not Interested
-                          </button>
-                        </div>
-                      </div>
-
-                      {activeNoteId === contract.id ? (
-                        <div className="notes-editor">
-                          <textarea
-                            className="notes-textarea"
-                            rows="4"
-                            value={draftNotes[contract.id] || ''}
-                            onChange={(event) =>
-                              setDraftNotes((currentDrafts) => ({
-                                ...currentDrafts,
-                                [contract.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="Add notes about this contract..."
-                          />
-                          <div className="notes-editor-actions">
+                        <div className="notes-header-row">
+                          <h4 className="notes-title">Notes</h4>
+                          <div className="contract-action-buttons">
                             <button
-                              className="notes-save-button"
-                              onClick={() => handleSaveNote(contract.id)}
+                              className="note-action-button"
+                              onClick={() => handleOpenNotes(contract)}
                             >
-                              Save Note
+                              {contract.notes ? 'Edit Note' : 'Add Note'}
                             </button>
                             <button
-                              className="notes-cancel-button"
-                              onClick={() => setActiveNoteId(null)}
+                              className="not-interested-button"
+                              onClick={() => handleNotInterested(contract.id)}
                             >
-                              Cancel
+                              Not Interested
                             </button>
                           </div>
                         </div>
-                      ) : (
-                        <div className="notes-display-box">
-                          {contract.notes || 'No notes added yet.'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
 
-                {filteredContracts.length === 0 && (
-                  <div className="empty-contract-state">
-                    No contracts available for this view.
+                        {activeNoteId === contract.id ? (
+                          <div className="notes-editor">
+                            <textarea
+                              className="notes-textarea"
+                              rows="4"
+                              value={draftNotes[contract.id] || ''}
+                              onChange={(event) =>
+                                setDraftNotes((currentDrafts) => ({
+                                  ...currentDrafts,
+                                  [contract.id]: event.target.value,
+                                }))
+                              }
+                              placeholder="Add notes about this contract..."
+                            />
+                            <div className="notes-editor-actions">
+                              <button
+                                className="notes-save-button"
+                                onClick={() => handleSaveNote(contract.id)}
+                              >
+                                Save Note
+                              </button>
+                              <button
+                                className="notes-cancel-button"
+                                onClick={() => setActiveNoteId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="notes-display-box">
+                            {contract.notes || 'No notes added yet.'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="contract-card">
+                    <p>No contracts match the current search and filter selection.</p>
                   </div>
                 )}
               </div>
