@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
+const STATUS_OPTIONS = ['Not Started', 'Reviewing', 'Drafting', 'Submitted'];
 
 const formatLastSynced = () =>
   new Date().toLocaleString('en-US', {
@@ -13,22 +14,8 @@ const formatLastSynced = () =>
     minute: '2-digit',
   });
 
-const buildOpportunitiesUrl = (searchTerm, naicsCode) => {
-  const url = new URL(OPPORTUNITIES_API_URL);
-
-  if (searchTerm.trim()) {
-    url.searchParams.set('search', searchTerm.trim());
-  }
-
-  if (naicsCode) {
-    url.searchParams.set('naics_code', naicsCode);
-  }
-
-  return url.toString();
-};
-
-async function fetchOpportunities(searchTerm, naicsCode, signal) {
-  const response = await fetch(buildOpportunitiesUrl(searchTerm, naicsCode), { signal });
+async function fetchOpportunities(signal) {
+  const response = await fetch(OPPORTUNITIES_API_URL, { signal });
 
   let data = [];
   try {
@@ -51,10 +38,11 @@ async function fetchOpportunities(searchTerm, naicsCode, signal) {
 function DashboardPage() {
   const navigate = useNavigate();
   const [hoveredId, setHoveredId] = useState(null);
-  const [opportunities, setOpportunities] = useState([]);
   const [allOpportunities, setAllOpportunities] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNaics, setSelectedNaics] = useState('');
+  const [selectedAgency, setSelectedAgency] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -63,38 +51,14 @@ function DashboardPage() {
   useEffect(() => {
     const controller = new AbortController();
 
-    const loadFilterOptions = async () => {
-      try {
-        const data = await fetchOpportunities('', '', controller.signal);
-        setAllOpportunities(data);
-        setLastSynced(formatLastSynced());
-      } catch (fetchError) {
-        if (fetchError.name === 'AbortError') {
-          return;
-        }
-      }
-    };
-
-    loadFilterOptions();
-
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const loadVisibleOpportunities = async () => {
+    const loadOpportunities = async () => {
       setLoading(true);
       setError('');
 
       try {
-        const data = await fetchOpportunities(searchTerm, selectedNaics, controller.signal);
-        setOpportunities(data);
-
-        if (!searchTerm.trim() && !selectedNaics) {
-          setAllOpportunities(data);
-          setLastSynced(formatLastSynced());
-        }
+        const data = await fetchOpportunities(controller.signal);
+        setAllOpportunities(data);
+        setLastSynced(formatLastSynced());
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
           return;
@@ -106,7 +70,7 @@ function DashboardPage() {
             ? 'Could not connect to the server.'
             : fetchError.message || 'Failed to load opportunities.'
         );
-        setOpportunities([]);
+        setAllOpportunities([]);
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -114,10 +78,20 @@ function DashboardPage() {
       }
     };
 
-    loadVisibleOpportunities();
+    loadOpportunities();
 
     return () => controller.abort();
-  }, [searchTerm, selectedNaics]);
+  }, []);
+
+  const agencyOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        allOpportunities
+          .map((opportunity) => opportunity.agency)
+          .filter(Boolean)
+      )
+    ).sort((left, right) => left.localeCompare(right));
+  }, [allOpportunities]);
 
   const naicsOptions = useMemo(() => {
     return Array.from(
@@ -128,6 +102,37 @@ function DashboardPage() {
       )
     ).sort();
   }, [allOpportunities]);
+
+  const filteredOpportunities = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const normalizedAgency = selectedAgency.trim().toLowerCase();
+    const normalizedStatus = selectedStatus.trim().toLowerCase();
+
+    return allOpportunities.filter((opportunity) => {
+      const searchableText = [
+        opportunity.title,
+        opportunity.agency,
+        opportunity.description,
+        opportunity.partner,
+        opportunity.status,
+        opportunity.naics_code,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      const opportunityAgency = String(opportunity.agency || '').trim().toLowerCase();
+      const opportunityStatus = String(opportunity.status || '').trim().toLowerCase();
+      const opportunityNaics = String(opportunity.naics_code || '').trim();
+
+      const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
+      const matchesAgency = !normalizedAgency || opportunityAgency === normalizedAgency;
+      const matchesStatus = !normalizedStatus || opportunityStatus === normalizedStatus;
+      const matchesNaics = !selectedNaics || opportunityNaics === selectedNaics;
+
+      return matchesSearch && matchesAgency && matchesStatus && matchesNaics;
+    });
+  }, [allOpportunities, searchTerm, selectedAgency, selectedStatus, selectedNaics]);
 
   const quickBrowseItems = useMemo(() => {
     const countsByNaics = allOpportunities.reduce((counts, opportunity) => {
@@ -152,21 +157,16 @@ function DashboardPage() {
       .map(([code, count]) => ({ code, count }));
   }, [allOpportunities]);
 
-  const recentOpportunities = useMemo(() => opportunities.slice(0, 3), [opportunities]);
+  const recentOpportunities = useMemo(() => filteredOpportunities.slice(0, 3), [filteredOpportunities]);
 
   const handleSyncContracts = async () => {
     setIsSyncing(true);
     setError('');
 
     try {
-      const [catalogData, visibleData] = await Promise.all([
-        fetchOpportunities('', ''),
-        fetchOpportunities(searchTerm, selectedNaics),
-      ]);
-
-      setAllOpportunities(catalogData);
-      setOpportunities(visibleData);
+      const catalogData = await fetchOpportunities();
       setLastSynced(formatLastSynced());
+      setAllOpportunities(catalogData);
     } catch (fetchError) {
       const isNetworkError = fetchError instanceof TypeError;
       setError(
@@ -261,7 +261,25 @@ function DashboardPage() {
               <div className="section-heading-row">
                 <div>
                   <h2 className="section-title">For You</h2>
-                  <p className="section-helper-text">Filter live opportunities by NAICS code and review the matching results.</p>
+                  <p className="section-helper-text">Filter live opportunities by agency, status, NAICS code, and search terms.</p>
+                </div>
+                <div className="filter-group">
+                  <label htmlFor="agencyFilter" className="filter-label">
+                    Agency
+                  </label>
+                  <select
+                    id="agencyFilter"
+                    className="partner-filter"
+                    value={selectedAgency}
+                    onChange={(event) => setSelectedAgency(event.target.value)}
+                  >
+                    <option value="">All Agencies</option>
+                    {agencyOptions.map((agency) => (
+                      <option key={agency} value={agency}>
+                        {agency}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="filter-group">
                   <label htmlFor="naicsFilter" className="filter-label">
@@ -281,17 +299,35 @@ function DashboardPage() {
                     ))}
                   </select>
                 </div>
+                <div className="filter-group">
+                  <label htmlFor="statusFilter" className="filter-label">
+                    Status
+                  </label>
+                  <select
+                    id="statusFilter"
+                    className="partner-filter"
+                    value={selectedStatus}
+                    onChange={(event) => setSelectedStatus(event.target.value)}
+                  >
+                    <option value="">All Statuses</option>
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {loading ? (
                 <div className="state-card">Loading opportunities...</div>
               ) : error ? (
                 <div className="state-card state-card-error">{error}</div>
-              ) : opportunities.length === 0 ? (
+              ) : filteredOpportunities.length === 0 ? (
                 <div className="state-card">No opportunities match the selected filters.</div>
               ) : (
                 <div className="contract-list">
-                  {opportunities.map((opportunity) => (
+                  {filteredOpportunities.map((opportunity) => (
                     <div key={opportunity.id} className="contract-card">
                       <div className="card-heading-row">
                         <div>
@@ -315,6 +351,9 @@ function DashboardPage() {
                             {opportunity.agency && (
                               <span className="partner-pill">{opportunity.agency}</span>
                             )}
+                            {opportunity.status && (
+                              <span className="status-tag status-tag-neutral">{opportunity.status}</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -327,6 +366,9 @@ function DashboardPage() {
                       </p>
                       <p>
                         <strong>Description:</strong> {opportunity.description || 'No description provided.'}
+                      </p>
+                      <p>
+                        <strong>Status:</strong> {opportunity.status || 'Not Started'}
                       </p>
                     </div>
                   ))}

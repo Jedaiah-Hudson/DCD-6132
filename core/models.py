@@ -11,6 +11,7 @@ class Opportunity(models.Model):
     description = models.TextField()
     naics_code = models.CharField(max_length=6, db_index=True)
     agency = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=32, blank=True, default='Not Started')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

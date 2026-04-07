@@ -383,15 +383,27 @@ class OpportunityListView(APIView):
         opportunities = Opportunity.objects.all()
 
         naics_code = (request.query_params.get('naics_code') or '').strip()
+        agency = (request.query_params.get('agency') or '').strip()
+        status_value = (request.query_params.get('status') or '').strip()
         search = (request.query_params.get('search') or '').strip()
         match_user = (request.query_params.get('match_user') or '').strip().lower() == 'true'
 
         if naics_code:
             opportunities = opportunities.filter(naics_code=naics_code)
 
+        if agency:
+            opportunities = opportunities.filter(agency__iexact=agency)
+
+        if status_value:
+            opportunities = opportunities.filter(status__iexact=status_value)
+
         if search:
             opportunities = opportunities.filter(
-                Q(title__icontains=search) | Q(description__icontains=search)
+                Q(title__icontains=search)
+                | Q(description__icontains=search)
+                | Q(agency__icontains=search)
+                | Q(status__icontains=search)
+                | Q(naics_code__icontains=search)
             )
 
         if match_user:

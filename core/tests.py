@@ -65,18 +65,21 @@ class OpportunityApiTests(APITestCase):
             description='Cyber operations and compliance support.',
             naics_code='541330',
             agency='DoD',
+            status='Reviewing',
         )
         Opportunity.objects.create(
             title='Facilities Maintenance',
             description='General building maintenance support.',
             naics_code='561210',
             agency='GSA',
+            status='Submitted',
         )
         Opportunity.objects.create(
             title='Cloud Engineering Contract',
             description='Secure cloud migration for federal systems.',
             naics_code='541330',
             agency='VA',
+            status='Drafting',
         )
 
     def test_list_all_opportunities(self):
@@ -101,6 +104,7 @@ class OpportunityApiTests(APITestCase):
         self.assertIn('description', response.data[0])
         self.assertIn('naics_code', response.data[0])
         self.assertIn('agency', response.data[0])
+        self.assertIn('status', response.data[0])
 
     def test_search_by_keyword(self):
         response = self.client.get('/api/opportunities/?search=cloud')
@@ -115,6 +119,27 @@ class OpportunityApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['title'], 'Cybersecurity Support Services')
+
+    def test_filter_by_agency_case_insensitive(self):
+        response = self.client.get('/api/opportunities/?agency=dod')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['agency'], 'DoD')
+
+    def test_filter_by_status_case_insensitive(self):
+        response = self.client.get('/api/opportunities/?status=submitted')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['status'], 'Submitted')
+
+    def test_apply_all_filters_together(self):
+        response = self.client.get('/api/opportunities/?search=cloud&naics_code=541330&agency=va&status=drafting')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['title'], 'Cloud Engineering Contract')
 
     def test_match_user_filters_by_capability_profile_naics_codes(self):
         CapabilityProfile.objects.create(
