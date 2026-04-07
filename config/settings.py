@@ -162,3 +162,19 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+
+# MSAL Configuration for Outlook OAuth
+MSAL_CONFIG = {
+    'client_id': os.getenv("MSAL_CLIENT_ID", ""),
+    'client_secret': os.getenv("MSAL_CLIENT_SECRET", ""),
+    'authority': os.getenv("MSAL_AUTHORITY", "https://login.microsoftonline.com/common"),
+    'redirect_uri': os.getenv(
+        "MSAL_REDIRECT_URI",
+        "http://127.0.0.1:8000/accounts/outlook/callback/",
+    ),
+    'scope': [
+        "offline_access",
+        "https://graph.microsoft.com/Mail.Read",
+        "https://graph.microsoft.com/User.Read",
+    ],
+}
