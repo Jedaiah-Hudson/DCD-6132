@@ -132,7 +132,7 @@ function DashboardPage() {
   }, [contracts, selectedPartner]);
 
   const selectedContract =
-    filteredContracts.find((contract) => contract.id === selectedContractId) || null;
+    contracts.find((contract) => contract.id === selectedContractId) || null;
 
   const handleSyncContracts = () => {
     setIsSyncing(true);
@@ -170,6 +170,36 @@ function DashboardPage() {
       )
     );
     setActiveNoteId(null);
+  };
+
+  const handleDeleteContract = (contractId) => {
+    const confirmDelete = window.confirm(
+      'Are you sure you want to delete this contract? This action cannot be undone.'
+    );
+  
+    if (!confirmDelete) return;
+  
+    setContracts((currentContracts) =>
+      currentContracts.filter((contract) => contract.id !== contractId)
+    );
+  
+    if (selectedContractId === contractId) {
+      setSelectedContractId(null);
+    }
+  
+    if (activeNoteId === contractId) {
+      setActiveNoteId(null);
+    }
+  
+    setDraftNotes((currentDrafts) => {
+      const updatedDrafts = { ...currentDrafts };
+      delete updatedDrafts[contractId];
+      return updatedDrafts;
+    });
+  
+    if (hoveredId === contractId) {
+      setHoveredId(null);
+    }
   };
 
   const getStatusClassName = (status) => {
@@ -268,7 +298,9 @@ function DashboardPage() {
               <div className="section-heading-row">
                 <div>
                   <h2 className="section-title">For You</h2>
-                  <p className="section-helper-text">Filter by partner and review source, notes, and contract status.</p>
+                  <p className="section-helper-text">
+                    Filter by partner and review source, notes, and contract status.
+                  </p>
                 </div>
                 <div className="filter-group">
                   <label htmlFor="partnerFilter" className="filter-label">
@@ -321,7 +353,9 @@ function DashboardPage() {
                         )}
 
                         <div className="card-meta-row">
-                          <span className={getSourceClassName(contract.source)}>{contract.source}</span>
+                          <span className={getSourceClassName(contract.source)}>
+                            {contract.source}
+                          </span>
                           <span className="partner-pill">Partner: {contract.partner}</span>
                           <span className="contract-tag">{contract.category}</span>
                         </div>
@@ -338,7 +372,9 @@ function DashboardPage() {
                           id={`status-${contract.id}`}
                           className="status-select"
                           value={contract.status}
-                          onChange={(event) => handleStatusChange(contract.id, event.target.value)}
+                          onChange={(event) =>
+                            handleStatusChange(contract.id, event.target.value)
+                          }
                         >
                           {statusOptions.map((status) => (
                             <option key={status} value={status}>
@@ -346,7 +382,9 @@ function DashboardPage() {
                             </option>
                           ))}
                         </select>
-                        <span className={getStatusClassName(contract.status)}>{contract.status}</span>
+                        <span className={getStatusClassName(contract.status)}>
+                          {contract.status}
+                        </span>
                       </div>
                     </div>
 
@@ -359,6 +397,9 @@ function DashboardPage() {
                     <p>
                       <strong>Due Date:</strong> {contract.dueDate}
                     </p>
+                    <p>
+                      <strong>Source:</strong> {contract.source}
+                    </p>
 
                     <div
                       className="notes-section"
@@ -366,12 +407,20 @@ function DashboardPage() {
                     >
                       <div className="notes-header-row">
                         <h4 className="notes-title">Notes</h4>
-                        <button
-                          className="note-action-button"
-                          onClick={() => handleOpenNotes(contract)}
-                        >
-                          {contract.notes ? 'Edit Note' : 'Add Note'}
-                        </button>
+                        <div className="contract-action-buttons">
+                          <button
+                            className="note-action-button"
+                            onClick={() => handleOpenNotes(contract)}
+                          >
+                            {contract.notes ? 'Edit Note' : 'Add Note'}
+                          </button>
+                          <button
+                            className="delete-contract-button"
+                            onClick={() => handleDeleteContract(contract.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
 
                       {activeNoteId === contract.id ? (
@@ -411,6 +460,12 @@ function DashboardPage() {
                     </div>
                   </div>
                 ))}
+
+                {filteredContracts.length === 0 && (
+                  <div className="empty-contract-state">
+                    No contracts available for this view.
+                  </div>
+                )}
               </div>
             </section>
 
