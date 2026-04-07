@@ -13,13 +13,15 @@ class Contract(models.Model):
         choices=SourceType.choices,
         db_index=True
     )
+    procurement_portal = models.CharField(max_length=50, blank=True, db_index=True)
+
     title = models.CharField(max_length=255)
     summary = models.TextField()
     deadline = models.DateTimeField(null=True, blank=True)
     agency = models.CharField(max_length=255)
     sub_agency = models.CharField(max_length=255, blank=True)
     naics_code = models.CharField(max_length=50, blank=True)
-    hyperlink = models.URLField(blank=True)
+    hyperlink = models.URLField(blank=True, db_index=True)
     partner_name = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=50, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
