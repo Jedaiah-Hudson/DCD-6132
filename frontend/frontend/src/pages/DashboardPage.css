@@ -225,6 +225,20 @@
     font-size: 0.95rem;
 }
 
+.state-card {
+    background-color: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 22px 24px;
+    color: #374151;
+}
+
+.state-card-error {
+    border-color: #fecaca;
+    background-color: #fef2f2;
+    color: #991b1b;
+}
+
 .contract-list {
     display: flex;
     flex-direction: column;

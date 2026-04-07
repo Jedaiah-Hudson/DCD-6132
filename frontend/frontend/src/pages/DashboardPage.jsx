@@ -1,175 +1,182 @@
 import './DashboardPage.css';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const initialContracts = [
-  {
-    id: 1,
-    title: 'Cybersecurity Infrastructure Enhancement',
-    agency: 'Department of Defense',
-    naics: '541512',
-    dueDate: 'March 15, 2026',
-    category: 'Prime',
-    partner: 'Northwind Systems',
-    source: 'Email',
-    status: 'Reviewing',
-    notes: 'Strong match for existing cybersecurity experience.',
-    summary: 'Enhance cybersecurity infrastructure across multiple defense systems, focusing on threat detection and system resilience.',
-  },
-  {
-    id: 2,
-    title: 'Medical Equipment Manufacturing Contract',
-    agency: 'Department of Health & Human Services',
-    naics: '339112',
-    dueDate: 'March 22, 2026',
-    category: 'Subcontract',
-    partner: 'Apex Health Manufacturing',
-    source: 'Procurement',
-    status: 'Not Started',
-    notes: '',
-    summary: 'Manufacture and supply medical equipment for federal healthcare programs with strict compliance requirements.',
-  },
-  {
-    id: 3,
-    title: 'Industrial Equipment Maintenance Services',
-    agency: 'General Services Administration',
-    naics: '811310',
-    dueDate: 'April 5, 2026',
-    category: 'Prime',
-    partner: 'Atlas Industrial Group',
-    source: 'Procurement',
-    status: 'Submitted',
-    notes: 'Follow up on required maintenance certifications.',
-    summary: 'Provide ongoing maintenance and repair services for industrial equipment across federal facilities.',
-  },
-  {
-    id: 4,
-    title: 'Healthcare IT System Implementation',
-    agency: 'Veterans Affairs',
-    naics: '541519',
-    dueDate: 'April 12, 2026',
-    category: 'Prime',
-    partner: 'Northwind Systems',
-    source: 'Email',
-    status: 'Drafting',
-    notes: '',
-    summary: 'Implement and integrate healthcare IT systems to improve patient data management and operational efficiency.',
-  },
-];
+const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
 
-const categories = [
-  { name: 'Cybersecurity', count: 24 },
-  { name: 'Manufacturing', count: 18 },
-  { name: 'Industrial', count: 15 },
-  { name: 'Healthcare', count: 21 },
-];
+const formatLastSynced = () =>
+  new Date().toLocaleString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 
-const recentHistory = [
-  {
-    id: 1,
-    agency: 'Department of Defense',
-    naics: '541512',
-    category: 'Prime',
-    dueDate: 'Feb 28, 2026',
-  },
-  {
-    id: 2,
-    agency: 'GSA',
-    naics: '541611',
-    category: 'Subcontract',
-    dueDate: 'Feb 25, 2026',
-  },
-  {
-    id: 3,
-    agency: 'Department of Energy',
-    naics: '221114',
-    category: 'Partnership',
-    dueDate: 'Feb 20, 2026',
-  },
-];
+const buildOpportunitiesUrl = (searchTerm, naicsCode) => {
+  const url = new URL(OPPORTUNITIES_API_URL);
 
-const statusOptions = ['Not Started', 'Reviewing', 'Drafting', 'Submitted'];
+  if (searchTerm.trim()) {
+    url.searchParams.set('search', searchTerm.trim());
+  }
+
+  if (naicsCode) {
+    url.searchParams.set('naics_code', naicsCode);
+  }
+
+  return url.toString();
+};
+
+async function fetchOpportunities(searchTerm, naicsCode, signal) {
+  const response = await fetch(buildOpportunitiesUrl(searchTerm, naicsCode), { signal });
+
+  let data = [];
+  try {
+    data = await response.json();
+  } catch {
+    data = [];
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to load opportunities.');
+  }
+
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected response from the server.');
+  }
+
+  return data;
+}
 
 function DashboardPage() {
   const navigate = useNavigate();
   const [hoveredId, setHoveredId] = useState(null);
-  const [contracts, setContracts] = useState(initialContracts);
-  const [selectedPartner, setSelectedPartner] = useState('All Partners');
+  const [opportunities, setOpportunities] = useState([]);
+  const [allOpportunities, setAllOpportunities] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedNaics, setSelectedNaics] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
-  const [lastSynced, setLastSynced] = useState('April 6, 2026 at 10:25 AM');
-  const [activeNoteId, setActiveNoteId] = useState(null);
-  const [draftNotes, setDraftNotes] = useState({});
+  const [lastSynced, setLastSynced] = useState('Not synced yet');
 
-  const partnerOptions = useMemo(() => {
-    const partners = Array.from(new Set(initialContracts.map((contract) => contract.partner)));
-    return ['All Partners', ...partners];
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadFilterOptions = async () => {
+      try {
+        const data = await fetchOpportunities('', '', controller.signal);
+        setAllOpportunities(data);
+        setLastSynced(formatLastSynced());
+      } catch (fetchError) {
+        if (fetchError.name === 'AbortError') {
+          return;
+        }
+      }
+    };
+
+    loadFilterOptions();
+
+    return () => controller.abort();
   }, []);
 
-  const filteredContracts = useMemo(() => {
-    if (selectedPartner === 'All Partners') {
-      return contracts;
-    }
+  useEffect(() => {
+    const controller = new AbortController();
 
-    return contracts.filter((contract) => contract.partner === selectedPartner);
-  }, [contracts, selectedPartner]);
+    const loadVisibleOpportunities = async () => {
+      setLoading(true);
+      setError('');
 
-  const handleSyncContracts = () => {
+      try {
+        const data = await fetchOpportunities(searchTerm, selectedNaics, controller.signal);
+        setOpportunities(data);
+
+        if (!searchTerm.trim() && !selectedNaics) {
+          setAllOpportunities(data);
+          setLastSynced(formatLastSynced());
+        }
+      } catch (fetchError) {
+        if (fetchError.name === 'AbortError') {
+          return;
+        }
+
+        const isNetworkError = fetchError instanceof TypeError;
+        setError(
+          isNetworkError
+            ? 'Could not connect to the server.'
+            : fetchError.message || 'Failed to load opportunities.'
+        );
+        setOpportunities([]);
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadVisibleOpportunities();
+
+    return () => controller.abort();
+  }, [searchTerm, selectedNaics]);
+
+  const naicsOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        allOpportunities
+          .map((opportunity) => opportunity.naics_code)
+          .filter(Boolean)
+      )
+    ).sort();
+  }, [allOpportunities]);
+
+  const quickBrowseItems = useMemo(() => {
+    const countsByNaics = allOpportunities.reduce((counts, opportunity) => {
+      const code = opportunity.naics_code;
+      if (!code) {
+        return counts;
+      }
+
+      counts.set(code, (counts.get(code) || 0) + 1);
+      return counts;
+    }, new Map());
+
+    return Array.from(countsByNaics.entries())
+      .sort((left, right) => {
+        if (right[1] !== left[1]) {
+          return right[1] - left[1];
+        }
+
+        return left[0].localeCompare(right[0]);
+      })
+      .slice(0, 4)
+      .map(([code, count]) => ({ code, count }));
+  }, [allOpportunities]);
+
+  const recentOpportunities = useMemo(() => opportunities.slice(0, 3), [opportunities]);
+
+  const handleSyncContracts = async () => {
     setIsSyncing(true);
-    setSyncMessage('');
+    setError('');
 
-    window.setTimeout(() => {
+    try {
+      const [catalogData, visibleData] = await Promise.all([
+        fetchOpportunities('', ''),
+        fetchOpportunities(searchTerm, selectedNaics),
+      ]);
+
+      setAllOpportunities(catalogData);
+      setOpportunities(visibleData);
+      setLastSynced(formatLastSynced());
+    } catch (fetchError) {
+      const isNetworkError = fetchError instanceof TypeError;
+      setError(
+        isNetworkError
+          ? 'Could not connect to the server.'
+          : fetchError.message || 'Failed to load opportunities.'
+      );
+    } finally {
       setIsSyncing(false);
-      setLastSynced('April 6, 2026 at 10:42 AM');
-      setSyncMessage('Contracts synced successfully.');
-    }, 1200);
-  };
-
-  const handleStatusChange = (contractId, nextStatus) => {
-    setContracts((currentContracts) =>
-      currentContracts.map((contract) =>
-        contract.id === contractId ? { ...contract, status: nextStatus } : contract
-      )
-    );
-  };
-
-  const handleOpenNotes = (contract) => {
-    setActiveNoteId(contract.id);
-    setDraftNotes((currentDrafts) => ({
-      ...currentDrafts,
-      [contract.id]: currentDrafts[contract.id] ?? contract.notes,
-    }));
-  };
-
-  const handleSaveNote = (contractId) => {
-    setContracts((currentContracts) =>
-      currentContracts.map((contract) =>
-        contract.id === contractId
-          ? { ...contract, notes: draftNotes[contractId] || '' }
-          : contract
-      )
-    );
-    setActiveNoteId(null);
-  };
-
-  const getStatusClassName = (status) => {
-    if (status === 'Submitted') {
-      return 'status-tag status-tag-submitted';
     }
-
-    if (status === 'Drafting') {
-      return 'status-tag status-tag-drafting';
-    }
-
-    if (status === 'Reviewing') {
-      return 'status-tag status-tag-reviewing';
-    }
-
-    return 'status-tag status-tag-neutral';
-  };
-
-  const getSourceClassName = (source) => {
-    return source === 'Procurement' ? 'source-label procurement-source' : 'source-label email-source';
   };
 
   return (
@@ -196,7 +203,13 @@ function DashboardPage() {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <input type="text" placeholder="Search contracts..." className="search-bar" />
+            <input
+              type="text"
+              placeholder="Search opportunities..."
+              className="search-bar"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
             <div className="topbar-icons">
               <span
                 className="profile-icon-circle"
@@ -227,7 +240,7 @@ function DashboardPage() {
               <div className="sync-header-row">
                 <div>
                   <h2 className="section-title">Contract Sync</h2>
-                  <p className="section-helper-text">Sync the latest opportunities from connected sources.</p>
+                  <p className="section-helper-text">Load the latest backend opportunities and refresh the dashboard.</p>
                 </div>
                 <button
                   className="sync-button"
@@ -240,7 +253,7 @@ function DashboardPage() {
 
               <div className="sync-feedback-row">
                 <p className="sync-meta-text">Last synced: {lastSynced}</p>
-                {syncMessage && <p className="sync-success-text">{syncMessage}</p>}
+                {!error && !loading && <p className="sync-success-text">Showing live backend opportunities.</p>}
               </div>
             </section>
 
@@ -248,171 +261,121 @@ function DashboardPage() {
               <div className="section-heading-row">
                 <div>
                   <h2 className="section-title">For You</h2>
-                  <p className="section-helper-text">Filter by partner and review source, notes, and contract status.</p>
+                  <p className="section-helper-text">Filter live opportunities by NAICS code and review the matching results.</p>
                 </div>
                 <div className="filter-group">
-                  <label htmlFor="partnerFilter" className="filter-label">
-                    Partner
+                  <label htmlFor="naicsFilter" className="filter-label">
+                    NAICS Code
                   </label>
                   <select
-                    id="partnerFilter"
+                    id="naicsFilter"
                     className="partner-filter"
-                    value={selectedPartner}
-                    onChange={(event) => setSelectedPartner(event.target.value)}
+                    value={selectedNaics}
+                    onChange={(event) => setSelectedNaics(event.target.value)}
                   >
-                    {partnerOptions.map((partner) => (
-                      <option key={partner} value={partner}>
-                        {partner}
+                    <option value="">All NAICS</option>
+                    {naicsOptions.map((naicsCode) => (
+                      <option key={naicsCode} value={naicsCode}>
+                        {naicsCode}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              <div className="contract-list">
-                {filteredContracts.map((contract) => (
-                  <div key={contract.id} className="contract-card">
-                    <div className="card-heading-row">
-                      <div>
-                      <div className="title-row">
-                        <h3>{contract.title}</h3>
-
-                        <span
-                          className="summary-button"
-                          onMouseEnter={() => setHoveredId(contract.id)}
-                          onMouseLeave={() => setHoveredId(null)}
-                        >
-                          View Summary
-                        </span>
-                      </div>
-                      {hoveredId === contract.id && (
-                        <div className="summary-popup">
-                          {contract.summary}
-                        </div>
-                      )}
-                        <div className="card-meta-row">
-                          <span className={getSourceClassName(contract.source)}>{contract.source}</span>
-                          <span className="partner-pill">Partner: {contract.partner}</span>
-                          <span className="contract-tag">{contract.category}</span>
-                        </div>
-                      </div>
-                      <div className="contract-status-block">
-                        <label htmlFor={`status-${contract.id}`} className="status-label">
-                          Status
-                        </label>
-                        <select
-                          id={`status-${contract.id}`}
-                          className="status-select"
-                          value={contract.status}
-                          onChange={(event) => handleStatusChange(contract.id, event.target.value)}
-                        >
-                          {statusOptions.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                        <span className={getStatusClassName(contract.status)}>{contract.status}</span>
-                      </div>
-                    </div>
-
-                    <p>
-                      <strong>Agency:</strong> {contract.agency}
-                    </p>
-                    <p>
-                      <strong>NAICS Code:</strong> {contract.naics}
-                    </p>
-                    <p>
-                      <strong>Due Date:</strong> {contract.dueDate}
-                    </p>
-
-                    <div className="notes-section">
-                      <div className="notes-header-row">
-                        <h4 className="notes-title">Notes</h4>
-                        <button
-                          className="note-action-button"
-                          onClick={() => handleOpenNotes(contract)}
-                        >
-                          {contract.notes ? 'Edit Note' : 'Add Note'}
-                        </button>
-                      </div>
-
-                      {activeNoteId === contract.id ? (
-                        <div className="notes-editor">
-                          <textarea
-                            className="notes-textarea"
-                            rows="4"
-                            value={draftNotes[contract.id] || ''}
-                            onChange={(event) =>
-                              setDraftNotes((currentDrafts) => ({
-                                ...currentDrafts,
-                                [contract.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="Add notes about this contract..."
-                          />
-                          <div className="notes-editor-actions">
-                            <button
-                              className="notes-save-button"
-                              onClick={() => handleSaveNote(contract.id)}
+              {loading ? (
+                <div className="state-card">Loading opportunities...</div>
+              ) : error ? (
+                <div className="state-card state-card-error">{error}</div>
+              ) : opportunities.length === 0 ? (
+                <div className="state-card">No opportunities match the selected filters.</div>
+              ) : (
+                <div className="contract-list">
+                  {opportunities.map((opportunity) => (
+                    <div key={opportunity.id} className="contract-card">
+                      <div className="card-heading-row">
+                        <div>
+                          <div className="title-row">
+                            <h3>{opportunity.title}</h3>
+                            <span
+                              className="summary-button"
+                              onMouseEnter={() => setHoveredId(opportunity.id)}
+                              onMouseLeave={() => setHoveredId(null)}
                             >
-                              Save Note
-                            </button>
-                            <button
-                              className="notes-cancel-button"
-                              onClick={() => setActiveNoteId(null)}
-                            >
-                              Cancel
-                            </button>
+                              View Summary
+                            </span>
+                          </div>
+                          {hoveredId === opportunity.id && (
+                            <div className="summary-popup">
+                              {opportunity.description || 'No summary available.'}
+                            </div>
+                          )}
+                          <div className="card-meta-row">
+                            <span className="contract-tag">NAICS {opportunity.naics_code}</span>
+                            {opportunity.agency && (
+                              <span className="partner-pill">{opportunity.agency}</span>
+                            )}
                           </div>
                         </div>
-                      ) : (
-                        <div className="notes-display-box">
-                          {contract.notes || 'No notes added yet.'}
-                        </div>
-                      )}
+                      </div>
+
+                      <p>
+                        <strong>Agency:</strong> {opportunity.agency || 'Not provided'}
+                      </p>
+                      <p>
+                        <strong>NAICS Code:</strong> {opportunity.naics_code}
+                      </p>
+                      <p>
+                        <strong>Description:</strong> {opportunity.description || 'No description provided.'}
+                      </p>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section className="section">
               <h2 className="section-title">Quick Browse</h2>
-              <div className="browse-grid">
-                {categories.map((category) => (
-                  <div key={category.name} className="browse-card">
-                    <h3>{category.name}</h3>
-                    <p>{category.count} opportunities</p>
-                  </div>
-                ))}
-              </div>
+              {quickBrowseItems.length === 0 ? (
+                <div className="state-card">No NAICS data available yet.</div>
+              ) : (
+                <div className="browse-grid">
+                  {quickBrowseItems.map((item) => (
+                    <div key={item.code} className="browse-card">
+                      <h3>{item.code}</h3>
+                      <p>{item.count} opportunities</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section className="section">
-              <h2 className="section-title">Recent Contract History</h2>
-              <div className="history-table-wrapper">
-                <table className="history-table">
-                  <thead>
-                    <tr>
-                      <th>Agency</th>
-                      <th>NAICS</th>
-                      <th>Category</th>
-                      <th>Due Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentHistory.map((item) => (
-                      <tr key={item.id}>
-                        <td>{item.agency}</td>
-                        <td>{item.naics}</td>
-                        <td>{item.category}</td>
-                        <td>{item.dueDate}</td>
+              <h2 className="section-title">Recent Opportunities</h2>
+              {recentOpportunities.length === 0 ? (
+                <div className="state-card">No opportunities available for the current filters.</div>
+              ) : (
+                <div className="history-table-wrapper">
+                  <table className="history-table">
+                    <thead>
+                      <tr>
+                        <th>Title</th>
+                        <th>Agency</th>
+                        <th>NAICS</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {recentOpportunities.map((opportunity) => (
+                        <tr key={opportunity.id}>
+                          <td>{opportunity.title}</td>
+                          <td>{opportunity.agency || 'Not provided'}</td>
+                          <td>{opportunity.naics_code}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           </div>
         </main>

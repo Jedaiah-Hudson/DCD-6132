@@ -92,6 +92,16 @@ class OpportunityApiTests(APITestCase):
         self.assertEqual(len(response.data), 2)
         self.assertTrue(all(item['naics_code'] == '541330' for item in response.data))
 
+    def test_dashboard_fields_are_present_in_opportunity_payload(self):
+        response = self.client.get('/api/opportunities/?naics_code=541330')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.data), 1)
+        self.assertIn('title', response.data[0])
+        self.assertIn('description', response.data[0])
+        self.assertIn('naics_code', response.data[0])
+        self.assertIn('agency', response.data[0])
+
     def test_search_by_keyword(self):
         response = self.client.get('/api/opportunities/?search=cloud')
 

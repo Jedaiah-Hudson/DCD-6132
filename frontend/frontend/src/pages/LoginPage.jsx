@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
+const LOGIN_API_URL = 'http://127.0.0.1:8000/accounts/login/';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ function LoginPage() {
     setLoading(true);
   
     try {
-      const response = await fetch('http://127.0.0.1:8000/accounts/login/', {
+      const response = await fetch(LOGIN_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -38,26 +39,41 @@ function LoginPage() {
           password: trimmedPassword,
         }),
       });
-  
-      const data = await response.json();
-  
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
       if (!response.ok) {
-        alert(data.message || 'Login failed.');
+        if (response.status === 401) {
+          alert(data?.message || 'Invalid email or password.');
+        } else if (response.status === 400) {
+          alert(data?.message || 'Please check your email and password.');
+        } else if (response.status >= 500) {
+          alert('The server encountered an error. Please try again.');
+        } else {
+          alert(data?.message || 'Login failed.');
+        }
         setLoading(false);
         return;
       }
   
       localStorage.setItem('token', data.token);
       localStorage.setItem('userEmail', data.user.email);
-      
-      console.log('login response:', data);
-      console.log('stored token:', localStorage.getItem('token'));
   
       alert(data.message || 'Login successful!');
       setLoading(false);
       navigate('/dashboard');
     } catch (error) {
-      alert('Could not connect to the server.');
+      const isNetworkError = error instanceof TypeError;
+      alert(
+        isNetworkError
+          ? 'Could not connect to the server.'
+          : 'An unexpected error occurred. Please try again.'
+      );
       setLoading(false);
     }
   };
