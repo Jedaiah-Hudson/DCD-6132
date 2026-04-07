@@ -3,11 +3,19 @@ from django.conf import settings
 
 class Contract(models.Model):
 
-    source = models.CharField(max_length=255)
-    source_mailbox = models.CharField(max_length=255)
+    class SourceType(models.TextChoices):
+        GMAIL = "gmail", "Gmail"
+        OUTLOOK = "outlook", "Outlook"
+        PROCUREMENT = "procurement", "Procurement"
+
+    source = models.CharField(
+        max_length=20,
+        choices=SourceType.choices,
+        db_index=True
+    )
     title = models.CharField(max_length=255)
     summary = models.TextField()
-    deadline = models.DateField()
+    deadline = models.DateTimeField(null=True, blank=True)
     agency = models.CharField(max_length=255)
     sub_agency = models.CharField(max_length=255, blank=True)
     naics_code = models.CharField(max_length=50, blank=True)

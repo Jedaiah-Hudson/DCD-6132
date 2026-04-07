@@ -5,6 +5,11 @@ from contracts.models import Contract
 
 def contract_list(request):
     contracts = Contract.objects.filter(user=request.user).order_by("deadline")
+    
+    source = request.GET.get("source")
+    if source:
+        contracts = contracts.filter(source=source)
+
 
     data = []
 
@@ -15,7 +20,7 @@ def contract_list(request):
             contract.category = category
             contract.save(update_fields=["category"])
 
-            
+
         data.append({
             "id": contract.id,
             "title": contract.title,
