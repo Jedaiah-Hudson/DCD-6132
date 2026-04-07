@@ -26,7 +26,26 @@ and you're good!
 If you want to run:
 python manage.py runserver
 
+
+
+How to Run the Frontend (React)
+
+1. Navigate to the frontend folder
+cd frontend/frontend 
+
+2. Install dependencies
+npm install 
+(This installs all required packages.)
+
+3. Start the development server
+npm run dev 
+
+
 Notes:
 - This project uses a custom user model: `AUTH_USER_MODEL = 'accounts.User'`.
 - `DB_PASSWORD` must be set or Django will raise a startup configuration error.
 - A sample env file is provided at `.env.example`.
+
+
+
+

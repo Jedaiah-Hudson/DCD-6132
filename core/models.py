@@ -5,3 +5,16 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 
 # Create your models here.
 
+
+class Opportunity(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    naics_code = models.CharField(max_length=6, db_index=True)
+    agency = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+
+    def __str__(self):
+        return self.title

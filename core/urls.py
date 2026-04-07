@@ -8,4 +8,5 @@ urlpatterns = [
     path('api/profile/', views.get_capability_profile, name='get_capability_profile'),
     path('api/profile/extract/', views.extract_capability_profile, name='extract_capability_profile'),
     path('api/profile/save/', views.save_capability_profile, name='save_capability_profile'),
+    path('api/opportunities/', views.OpportunityListView.as_view(), name='opportunity_list'),
 ]
