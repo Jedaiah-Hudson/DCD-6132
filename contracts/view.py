@@ -1,15 +1,13 @@
 from django.http import JsonResponse
-from contracts.services.naics_utils import get_category_for_naics
+from contracts.management.services.naics_utils import get_category_for_naics
 from contracts.models import Contract
 
-
 def contract_list(request):
-    contracts = Contract.objects.filter(user=request.user).order_by("deadline")
-    
+    contracts = Contract.objects.all().order_by("deadline")
+
     source = request.GET.get("source")
     if source:
         contracts = contracts.filter(source=source)
-
 
     data = []
 
@@ -20,9 +18,9 @@ def contract_list(request):
             contract.category = category
             contract.save(update_fields=["category"])
 
-
         data.append({
             "id": contract.id,
+            "source": contract.source,
             "title": contract.title,
             "summary": contract.summary,
             "agency": contract.agency,
