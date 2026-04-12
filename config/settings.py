@@ -10,7 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+
 from pathlib import Path
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -29,18 +35,25 @@ ALLOWED_HOSTS = []
 
 
 # Application definition
-
 INSTALLED_APPS = [
+    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'core'
+    'rest_framework', ## for django rest framework, if ur planning on making apis, INSTALL pip install djangorestframework
+    'rest_framework.authtoken', ## for api end point aunthentication, Install pip install djangorestframework.authtoken
+    'core', ## local django app
+    'crispy_forms', ## for crispy forms in templates, Install pip install django-crispy-forms
+    'accounts', ## for user management, Install pip install django-user-management
+    'contracts', 
 ]
+AUTH_USER_MODEL = 'accounts.User'  # 'core' is the app name where the User model lives
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -73,6 +86,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
+
 
 DATABASES = {
     'default': {
@@ -122,11 +136,6 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-<<<<<<< HEAD
-=======
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
 ]
 
 REST_FRAMEWORK = {
@@ -146,6 +155,7 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
 
+
 # MSAL Configuration for Outlook OAuth
 MSAL_CONFIG = {
     'client_id': os.getenv("MSAL_CLIENT_ID"),
@@ -157,4 +167,4 @@ MSAL_CONFIG = {
 
 print("EMAIL_HOST_USER:", EMAIL_HOST_USER)
 print("DEFAULT_FROM_EMAIL:", DEFAULT_FROM_EMAIL)
->>>>>>> 057d3f8 (fixed MSAL Config)
+

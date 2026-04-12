@@ -1,0 +1,10 @@
+{
+  "name": "ai-matchmaking-tool",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend/frontend run dev",
+    "build": "npm --prefix frontend/frontend run build",
+    "lint": "npm --prefix frontend/frontend run lint",
+    "preview": "npm --prefix frontend/frontend run preview"
+  }
+}
