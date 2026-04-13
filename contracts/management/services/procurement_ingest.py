@@ -1,6 +1,11 @@
+import os
+from urllib import response
+
 from contracts.models import Contract
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
+import requests
+from contracts.management.services.naics_utils import get_category_for_naics
 
 
 def normalize_procurement_record(raw_record, source_name):
@@ -11,53 +16,62 @@ def normalize_procurement_record(raw_record, source_name):
     def parse_deadline(value):
         if not value:
             return None
-        parsed = parse_datetime(value)
-        if parsed:
-            return parsed
-        try:
-            return timezone.datetime.fromisoformat(value)
-        except Exception:
-            return None
+
+        dt = parse_datetime(value)
+
+        if not dt:
+            try:
+                dt = timezone.datetime.fromisoformat(value)
+            except Exception:
+                return None
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+        return dt
+        
     source_name = (source_name or "").strip().lower()
 
-    # SOURCE-SPECIFIC MAPPING
-    if source_name == ["sam", "sam.gov"]:
+
+    if "sam" in source_name:
         title = raw_record.get("title")
-        summary = raw_record.get("description")
+        procurement_portal = "SAM.gov"
+
+        summary_url = raw_record.get("description")
+
+        summary = fetch_description_text(summary_url)
+        if not summary:
+            summary = f"{raw_record.get('type', '')} - NAICS {raw_record.get('naicsCode', '')}"
+
         deadline = raw_record.get("responseDeadLine")
-        agency = raw_record.get("departmentName")
+
+        full_path = raw_record.get("fullParentPathName", "")
+
+        agency = ""
+        sub_agency = ""
+
+        if full_path:
+            parts = full_path.split(".")
+            agency = parts[0] if len(parts) > 0 else ""
+            sub_agency = parts[-1] if len(parts) > 1 else ""
+
         naics = raw_record.get("naicsCode")
+
         link = raw_record.get("uiLink")
-        status = raw_record.get("active", "") or raw_record.get("type", "")
 
-    elif source_name == ["gsa", "gsa ebuy", "ebuy"]:
-        title = raw_record.get("title")
-        summary = raw_record.get("description")
-        deadline = raw_record.get("deadline")
-        agency = raw_record.get("agency")
-        naics = raw_record.get("naics")
-        link = raw_record.get("link")
-        status = raw_record.get("status", "")
+        status_raw = raw_record.get("active")
 
-    elif source_name == ["doas", "georgia doas"]:
-        title = raw_record.get("title")
-        summary = raw_record.get("description")
-        deadline = raw_record.get("closing_date")
-        agency = raw_record.get("agency")
-        naics = raw_record.get("naics")
-        link = raw_record.get("link")
-        status = raw_record.get("status", "")
+        if status_raw == "Yes":
+            status = "Active"
+        elif status_raw == "No":
+            status = "Inactive"
+        else:
+            status = "Unknown"
 
-    else:
-        # fallback (for city portals / unknown)
-        title = raw_record.get("title")
-        summary = raw_record.get("summary") or raw_record.get("description")
-        deadline = raw_record.get("deadline")
-        agency = raw_record.get("agency")
-        naics = raw_record.get("naics")
-        link = raw_record.get("url") or raw_record.get("link")
-        status = raw_record.get("status", "")
-
+    
+        contacts = raw_record.get("pointOfContact", [])
+        partner_name = contacts[0]["fullName"] if contacts else ""
+        category = get_category_for_naics(naics) if naics else ""
+    
 
     return {
         "source": Contract.SourceType.PROCUREMENT,
@@ -65,22 +79,28 @@ def normalize_procurement_record(raw_record, source_name):
         "summary": summary or "",
         "deadline": parse_deadline(deadline),
         "agency": agency or "",
-        "sub_agency": raw_record.get("sub_agency", ""),
+        "sub_agency": sub_agency or "",
         "naics_code": naics or "",
         "hyperlink": link or "",
-        "status": raw_record.get("status", ""),
-        "category": raw_record.get("category", ""),
-        "partner_name": raw_record.get("partner_name", ""),
+        "partner_name": partner_name or "",
+        "status": status or "",
+        "category": category or "",
+        "procurement_portal": procurement_portal,
     }
 
 
 def ingest_procurement_record(raw_record, source_name):
     normalized = normalize_procurement_record(raw_record, source_name)
 
+   
+    deadline = normalized.get("deadline")
+    if deadline and timezone.is_naive(deadline):
+        normalized["deadline"] = timezone.make_aware(deadline, timezone.get_current_timezone())
+
+
     hyperlink = normalized.get("hyperlink")
     title = normalized.get("title")
     agency = normalized.get("agency")
-    deadline = normalized.get("deadline")
 
     if hyperlink:
         contract, created = Contract.objects.update_or_create(
@@ -89,12 +109,43 @@ def ingest_procurement_record(raw_record, source_name):
         )
         return contract, created
 
+
     contract, created = Contract.objects.update_or_create(
         source=Contract.SourceType.PROCUREMENT,
-        procurement_portal=normalized.get("procurement_portal", ""),
         title=title,
         agency=agency,
-        deadline=deadline,
+        deadline=normalized.get("deadline"),  
         defaults=normalized,
     )
+
     return contract, created
+
+SAM_API_KEY = os.environ.get("SAM_API_KEY")
+
+def fetch_description_text(url):
+    if not url:
+        return ""
+
+    try:
+        response = requests.get(
+            url,
+            params={"api_key": SAM_API_KEY},
+            timeout=10
+        )
+        
+        response.raise_for_status()
+
+        data = response.json()
+
+        description = (
+            data.get("description")
+            or data.get("body")
+            or data.get("noticeDescription")
+            or ""
+        )
+
+        return description[:2000]  # truncate
+
+    except Exception as e:
+        print("DESC FETCH ERROR:", e)
+        return ""
