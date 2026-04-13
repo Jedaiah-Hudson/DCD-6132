@@ -14,6 +14,26 @@ const formatLastSynced = () =>
     minute: '2-digit',
   });
 
+  const SAM_SYNC_URL = 'http://127.0.0.1:8000/api/sam/sync/';
+
+async function syncSamOpportunities(limit = 10) {
+  const response = await fetch(SAM_SYNC_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ limit }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Sync failed');
+  }
+
+  return data;
+}
+
 async function fetchOpportunities(signal) {
   const response = await fetch(OPPORTUNITIES_API_URL, { signal });
 
@@ -164,20 +184,27 @@ function DashboardPage() {
     setError('');
 
     try {
-      const catalogData = await fetchOpportunities();
-      setLastSynced(formatLastSynced());
-      setAllOpportunities(catalogData);
-    } catch (fetchError) {
-      const isNetworkError = fetchError instanceof TypeError;
-      setError(
-        isNetworkError
-          ? 'Could not connect to the server.'
-          : fetchError.message || 'Failed to load opportunities.'
-      );
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+    const result = await syncSamOpportunities(10);
+
+    // after sync finishes, reload opportunities from DB
+    const catalogData = await fetchOpportunities();
+
+    setAllOpportunities(catalogData);
+    setLastSynced(formatLastSynced());
+
+    console.log('Sync result:', result);
+  } catch (fetchError) {
+    const isNetworkError = fetchError instanceof TypeError;
+
+    setError(
+      isNetworkError
+        ? 'Could not connect to the server.'
+        : fetchError.message || 'Sync failed.'
+    );
+  } finally {
+    setIsSyncing(false);
+  }
+};
 
   return (
     <div className="dashboard-layout">

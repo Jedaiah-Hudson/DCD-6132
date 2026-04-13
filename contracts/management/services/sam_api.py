@@ -30,7 +30,7 @@ def fetch_sam_opportunities(
         posted_to = datetime.today().strftime("%m/%d/%Y")
 
     if not posted_from:
-        posted_from = (datetime.today() - timedelta(days=30)).strftime("%m/%d/%Y")
+        posted_from = (datetime.today() - timedelta(days=2)).strftime("%m/%d/%Y")
 
     params = {
         "api_key": api_key,
@@ -61,44 +61,68 @@ def fetch_sam_opportunities(
         raise Exception(f"SAM.gov request failed: {str(e)}")
 
 
+import time
+
 def ingest_sam_opportunities(
     notice_type=None,
     posted_from=None,
     posted_to=None,
     keyword=None,
     naics_code=None,
-    limit=10,
-    offset=0,
+    limit=10,   
 ):
-    payload = fetch_sam_opportunities(
-        notice_type=notice_type,
-        posted_from=posted_from,
-        posted_to=posted_to,
-        keyword=keyword,
-        naics_code=naics_code,
-        limit=limit,
-        offset=offset,
-    )
-
-    records = (
-        payload.get("opportunitiesData")
-        or payload.get("opportunities")
-        or payload.get("data")
-        or []
-    )
+    total_ingested = 0
+    offset = 0
+    batch_size = 2   
 
     results = []
-    for record in records:
-        contract, created = ingest_procurement_record(record, "sam")
-        results.append({
-            "id": contract.id,
-            "title": contract.title,
-            "source": contract.source,
-            "created": created,
-        })
+    raw_total_records = None
+
+    while total_ingested < limit:
+        payload = fetch_sam_opportunities(
+            notice_type=notice_type,
+            posted_from=posted_from,
+            posted_to=posted_to,
+            keyword=keyword,
+            naics_code=naics_code,
+            limit=batch_size,
+            offset=offset,
+        )
+
+        if raw_total_records is None:
+            raw_total_records = payload.get("totalRecords")
+
+        records = (
+            payload.get("opportunitiesData")
+            or payload.get("opportunities")
+            or payload.get("data")
+            or []
+        )
+
+        if not records:
+            break
+
+        for record in records:
+            contract, created = ingest_procurement_record(record, "sam")
+
+            results.append({
+                "id": contract.id,
+                "title": contract.title,
+                "source": contract.source,
+                "created": created,
+            })
+
+            total_ingested += 1
+
+            if total_ingested >= limit:
+                break
+
+        offset += batch_size
+
+        time.sleep(3)
 
     return {
-        "count_ingested": len(results),
+        "count_ingested": total_ingested,
         "results": results,
-        "raw_total_records": payload.get("totalRecords") or payload.get("totalrecords"),
+        "raw_total_records": raw_total_records,
     }

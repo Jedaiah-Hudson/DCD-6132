@@ -1,7 +1,34 @@
 from django.http import JsonResponse
 from contracts.management.services.naics_utils import get_category_for_naics
 from contracts.models import Contract
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+import json
 
+from contracts.management.services.sam_api import ingest_sam_opportunities
+
+
+@csrf_exempt
+@require_POST
+def sync_sam_opportunities(request):
+    try:
+        body = json.loads(request.body or "{}")
+        limit = body.get("limit", 10)  # default safe limit
+
+        result = ingest_sam_opportunities(limit=limit)
+
+        return JsonResponse({
+            "status": "success",
+            "result": result
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+    
 def contract_list(request):
     contracts = Contract.objects.all().order_by("deadline")
 
