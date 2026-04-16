@@ -1,10 +1,8 @@
 import os
-from urllib import response
 
 from contracts.models import Contract
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
-import requests
 from contracts.management.services.naics_utils import get_category_for_naics
 
 
@@ -127,6 +125,8 @@ def fetch_description_text(url):
         return ""
 
     try:
+        import requests
+
         response = requests.get(
             url,
             params={"api_key": SAM_API_KEY},

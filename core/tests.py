@@ -4,6 +4,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from accounts.models import CapabilityProfile, User
+from core.models import Opportunity
 from contracts.models import Contract
 
 
@@ -172,3 +173,18 @@ class OpportunityApiTests(APITestCase):
         response = self.client.get('/api/opportunities/?match_user=true')
 
         self.assertEqual(response.status_code, 401)
+
+    def test_opportunity_api_ignores_legacy_core_opportunity_rows(self):
+        Opportunity.objects.create(
+            title='Legacy Opportunity Row',
+            description='This should not appear in the active API.',
+            naics_code='999999',
+            agency='Legacy Agency',
+            status='Legacy',
+        )
+
+        response = self.client.get('/api/opportunities/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 3)
+        self.assertFalse(any(item['title'] == 'Legacy Opportunity Row' for item in response.data))
