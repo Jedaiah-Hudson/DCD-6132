@@ -14,8 +14,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from rest_framework.views import APIView
 from accounts.models import CapabilityProfile, User
+from contracts.models import Contract
 from .forms import CapabilityProfileForm
-from .models import Opportunity
 from .serializers import OpportunitySerializer
 
 
@@ -380,7 +380,7 @@ class OpportunityListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        opportunities = Opportunity.objects.all()
+        contracts = Contract.objects.all().order_by('deadline', '-created_at')
 
         naics_code = (request.query_params.get('naics_code') or '').strip()
         agency = (request.query_params.get('agency') or '').strip()
@@ -389,19 +389,20 @@ class OpportunityListView(APIView):
         match_user = (request.query_params.get('match_user') or '').strip().lower() == 'true'
 
         if naics_code:
-            opportunities = opportunities.filter(naics_code=naics_code)
+            contracts = contracts.filter(naics_code=naics_code)
 
         if agency:
-            opportunities = opportunities.filter(agency__iexact=agency)
+            contracts = contracts.filter(agency__iexact=agency)
 
         if status_value:
-            opportunities = opportunities.filter(status__iexact=status_value)
+            contracts = contracts.filter(status__iexact=status_value)
 
         if search:
-            opportunities = opportunities.filter(
+            contracts = contracts.filter(
                 Q(title__icontains=search)
-                | Q(description__icontains=search)
+                | Q(summary__icontains=search)
                 | Q(agency__icontains=search)
+                | Q(partner_name__icontains=search)
                 | Q(status__icontains=search)
                 | Q(naics_code__icontains=search)
             )
@@ -422,7 +423,23 @@ class OpportunityListView(APIView):
                 for code in re.split(r'[\s,;\n]+', profile.naics_codes)
                 if code.strip()
             ]
-            opportunities = opportunities.filter(naics_code__in=user_naics_codes)
+            contracts = contracts.filter(naics_code__in=user_naics_codes)
+
+        opportunities = [
+            {
+                'id': contract.id,
+                'title': contract.title,
+                'description': contract.summary or '',
+                'naics_code': contract.naics_code or '',
+                'agency': contract.agency or '',
+                'status': contract.status or '',
+                'partner': contract.partner_name or '',
+                'source': contract.source or '',
+                'deadline': contract.deadline,
+                'hyperlink': contract.hyperlink or '',
+            }
+            for contract in contracts
+        ]
 
         serializer = OpportunitySerializer(opportunities, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

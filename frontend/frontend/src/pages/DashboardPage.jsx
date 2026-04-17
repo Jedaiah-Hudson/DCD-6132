@@ -180,6 +180,10 @@ function DashboardPage() {
   const recentOpportunities = useMemo(() => filteredOpportunities.slice(0, 3), [filteredOpportunities]);
 
   const handleSyncContracts = async () => {
+    if (isSyncing) {
+      return;
+    }
+
     setIsSyncing(true);
     setError('');
 

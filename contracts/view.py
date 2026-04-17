@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
 
-from contracts.management.services.sam_api import ingest_sam_opportunities
+from contracts.management.services.sam_api import SamApiError, ingest_sam_opportunities
 
 
 @csrf_exempt
@@ -23,6 +23,11 @@ def sync_sam_opportunities(request):
             "result": result
         })
 
+    except SamApiError as e:
+        return JsonResponse({
+            "status": "error",
+            "message": str(e)
+        }, status=e.status_code)
     except Exception as e:
         return JsonResponse({
             "status": "error",
