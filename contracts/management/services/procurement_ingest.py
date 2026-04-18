@@ -4,6 +4,10 @@ from contracts.models import Contract
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from contracts.management.services.naics_utils import get_category_for_naics
+import re
+import html
+import requests
+
 
 
 def normalize_procurement_record(raw_record, source_name):
@@ -120,19 +124,18 @@ def ingest_procurement_record(raw_record, source_name):
 
 SAM_API_KEY = os.environ.get("SAM_API_KEY")
 
+
 def fetch_description_text(url):
     if not url:
         return ""
 
     try:
-        import requests
-
         response = requests.get(
             url,
             params={"api_key": SAM_API_KEY},
             timeout=10
         )
-        
+
         response.raise_for_status()
 
         data = response.json()
@@ -144,7 +147,16 @@ def fetch_description_text(url):
             or ""
         )
 
-        return description[:2000]  # truncate
+        # Decode HTML entities
+        description = html.unescape(description)
+
+        # Strip HTML tags
+        description = re.sub(r"<[^>]+>", "", description)
+
+        # Normalize whitespace
+        description = re.sub(r"\s+", " ", description).strip()
+
+        return description
 
     except Exception as e:
         print("DESC FETCH ERROR:", e)
