@@ -7,7 +7,7 @@ class Contract(models.Model):
         GMAIL = "gmail", "Gmail"
         OUTLOOK = "outlook", "Outlook"
         PROCUREMENT = "procurement", "Procurement"
-
+    
     source = models.CharField(
         max_length=20,
         choices=SourceType.choices,
@@ -36,6 +36,40 @@ class Contract(models.Model):
     #         self.category = get_category_for_naics(self.naics_code)
     #     super().save(*args, **kwargs)
 
+class UserContractProgress(models.Model):
+
+    class ProgressChoices(models.TextChoices):
+        NONE = "NONE", "None"
+        PENDING = "PENDING", "Pending"
+        WON = "WON", "Won"
+        LOST = "LOST", "Lost"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="contract_progress_labels"
+    )
+
+    contract = models.ForeignKey(
+        Contract,
+        on_delete=models.CASCADE,
+        related_name="user_progress"
+    )
+
+    contract_progress = models.CharField(
+        max_length=10,
+        choices=ProgressChoices.choices,
+        default=ProgressChoices.NONE
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "contract")
+
+    def __str__(self):
+        return f"{self.user} - {self.contract.title} - {self.contract_progress}"
 
 class ContractNote(models.Model):
     contract = models.ForeignKey(
