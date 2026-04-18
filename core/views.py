@@ -317,6 +317,10 @@ def get_capability_profile(request):
         for key in PROFILE_KEYS
     }
 
+    profile_data["naics_codes"] = [
+    n.code for n in profile.naics_codes.all()
+    ] if profile else []
+
     processed_file_name = None
     if hasattr(profile, 'source_pdf') and profile.source_pdf:
         processed_file_name = profile.source_pdf.name

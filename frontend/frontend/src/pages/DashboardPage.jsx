@@ -407,21 +407,7 @@ function DashboardPage() {
               )}
             </section>
 
-            <section className="section">
-              <h2 className="section-title">Quick Browse</h2>
-              {quickBrowseItems.length === 0 ? (
-                <div className="state-card">No NAICS data available yet.</div>
-              ) : (
-                <div className="browse-grid">
-                  {quickBrowseItems.map((item) => (
-                    <div key={item.code} className="browse-card">
-                      <h3>{item.code}</h3>
-                      <p>{item.count} opportunities</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+          
 
             <section className="section">
               <h2 className="section-title">Recent Opportunities</h2>
