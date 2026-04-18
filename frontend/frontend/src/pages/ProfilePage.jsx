@@ -23,7 +23,7 @@ function ProfilePage() {
   const [capabilitySummary, setCapabilitySummary] = useState('');
   const [coreCompetencies, setCoreCompetencies] = useState('');
   const [differentiators, setDifferentiators] = useState('');
-  const [naicsCodes, setNaicsCodes] = useState('');
+  const [naicsCodes, setNaicsCodes] = useState([]);
   const [certifications, setCertifications] = useState('');
   const [pastPerformance, setPastPerformance] = useState('');
   const [contactName, setContactName] = useState('');
@@ -63,7 +63,7 @@ function ProfilePage() {
     setCapabilitySummary(profile.capability_summary || '');
     setCoreCompetencies(profile.core_competencies || '');
     setDifferentiators(profile.differentiators || '');
-    setNaicsCodes(profile.naics_codes || '');
+    setNaicsCodes(profile.naics_codes || []);
     setCertifications(profile.certifications || '');
     setPastPerformance(profile.past_performance || '');
     setContactName(profile.contact_name || '');
@@ -467,12 +467,7 @@ function ProfilePage() {
               </section>
             )}
 
-            <section className="profile-section-card">
-              <h2 className="profile-section-title">Structured Data (Dictionary View)</h2>
-              <pre className="profile-structured-data">
-                {JSON.stringify(structuredData, null, 2)}
-              </pre>
-            </section>
+            
           </div>
         </main>
       </div>

@@ -7,7 +7,9 @@ from django.contrib.auth.models import (
 from django.db.models.functions import Lower
 
 from django.conf import settings
-# Create your models here.
+
+from contracts.models import NAICSCode
+
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None):
@@ -75,11 +77,19 @@ class CapabilityProfile(models.Model):
         on_delete=models.CASCADE,
         related_name='capability_profiles'
     )
+
     company_name = models.CharField(max_length=255, blank=True)
     capability_summary = models.TextField(blank=True)
     core_competencies = models.TextField(blank=True)
     differentiators = models.TextField(blank=True)
-    naics_codes = models.TextField(blank=True)
+
+    naics_codes = models.ManyToManyField(
+        NAICSCode,
+        blank=True,
+        related_name="capability_profiles"
+    )
+    
+    
     certifications = models.TextField(blank=True)
     past_performance = models.TextField(blank=True)
     contact_name = models.CharField(max_length=255, blank=True)
@@ -90,7 +100,6 @@ class CapabilityProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    is_ocr_generated = models.BooleanField(default=False)
 
     ocr_extracted_text = models.TextField(blank=True, default='')
     def __str__(self):
