@@ -273,3 +273,14 @@ def linked_email_detail_api(request, email_id):
         },
         status=status.HTTP_200_OK,
     )
+# views.py
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .models import NAICSCode
+from .serializers import NAICSCodeSerializer
+
+@api_view(['GET'])
+def naics_list(request):
+    naics = NAICSCode.objects.all()
+    serializer = NAICSCodeSerializer(naics, many=True)
+    return Response(serializer.data)
