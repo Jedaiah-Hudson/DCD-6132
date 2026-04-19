@@ -14,10 +14,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from rest_framework.views import APIView
 from accounts.models import CapabilityProfile, User
-from contracts.models import Contract
+from contracts.models import Contract, NAICSCode
 from .forms import CapabilityProfileForm
 from .serializers import OpportunitySerializer
-
 
 # Create your views here.
 @login_required(login_url='/accounts/login-vis/')
@@ -135,7 +134,7 @@ def parse_capability_text(text):
     if not parsed['naics_codes']:
         naics_matches = re.findall(r'\b\d{6}\b', full_text)
         if naics_matches:
-            parsed['naics_codes'] = ', '.join(sorted(set(naics_matches)))
+            parsed['naics_codes'] = sorted(set(naics_matches))
 
     if not parsed['certifications']:
         cert_lines = []
@@ -272,29 +271,35 @@ def profile(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def save_capability_profile(request):
+
     capability_data = {
         key: request.data.get(key, '')
         for key in PROFILE_KEYS
     }
+
+    # remove many-to-many field first
+    naics_codes = capability_data.pop("naics_codes", [])
 
     profile, created = CapabilityProfile.objects.update_or_create(
         user=request.user,
         defaults=capability_data
     )
 
+    # save dropdown selections
+    if naics_codes:
+        naics_objects = NAICSCode.objects.filter(code__in=naics_codes)
+        profile.naics_codes.set(naics_objects)
+    else:
+        profile.naics_codes.clear()
+
     profile.is_approved = True
     profile.save()
 
-    return Response(
-        {
-            'success': True,
-            'message': 'Capability profile saved successfully.',
-            'profile_id': profile.id,
-            'created': created,
-        },
-        status=status.HTTP_200_OK
-    )
-
+    return Response({
+        "success": True,
+        "message": "Capability profile saved successfully.",
+        "created": created
+    })
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -317,9 +322,9 @@ def get_capability_profile(request):
         for key in PROFILE_KEYS
     }
 
-    profile_data["naics_codes"] = [
-    n.code for n in profile.naics_codes.all()
-    ] if profile else []
+    profile_data["naics_codes"] = list(
+        profile.naics_codes.values_list("code", flat=True)
+    )
 
     processed_file_name = None
     if hasattr(profile, 'source_pdf') and profile.source_pdf:
@@ -419,7 +424,7 @@ class OpportunityListView(APIView):
                 )
 
             profile = CapabilityProfile.objects.filter(user=request.user).first()
-            if not profile or not profile.naics_codes.strip():
+            if not profile or not profile.naics_codes.exists():
                 return Response([], status=status.HTTP_200_OK)
 
             user_naics_codes = [

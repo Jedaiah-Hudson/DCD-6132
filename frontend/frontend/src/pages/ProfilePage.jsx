@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
+import NaicsMultiSelect from '../components/NaicsMultiSelect';
 
 const defaultMailboxConnections = [
   {
@@ -383,12 +384,10 @@ function ProfilePage() {
                 </div>
 
                 <div className="profile-field">
-                  <label className="profile-label">NAICS codes</label>
-                  <input
-                    type="text"
+                  {/* <label className="profile-label">NAICS codes</label> */}
+                  <NaicsMultiSelect
                     value={naicsCodes}
-                    onChange={(e) => setNaicsCodes(e.target.value)}
-                    className="profile-input"
+                    onChange={setNaicsCodes}
                   />
                 </div>
 

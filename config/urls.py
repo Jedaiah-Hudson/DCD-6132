@@ -16,10 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from accounts.views import naics_list
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('core.urls')),
     path('accounts/', include('accounts.urls')),  # ← this connects accounts
     path("", include("contracts.urls")),
+    path('api/naics/', naics_list, name='naics-list'),
 ]
