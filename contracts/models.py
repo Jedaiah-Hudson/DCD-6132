@@ -44,6 +44,12 @@ class UserContractProgress(models.Model):
         WON = "WON", "Won"
         LOST = "LOST", "Lost"
 
+    class WorkflowChoices(models.TextChoices):
+        NOT_STARTED = "NOT_STARTED", "Not Started"
+        REVIEWING = "REVIEWING", "Reviewing"
+        DRAFTING = "DRAFTING", "Drafting"
+        SUBMITTED = "SUBMITTED", "Submitted"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -60,6 +66,12 @@ class UserContractProgress(models.Model):
         max_length=10,
         choices=ProgressChoices.choices,
         default=ProgressChoices.NONE
+    )
+
+    workflow_status = models.CharField(
+        max_length=20,
+        choices=WorkflowChoices.choices,
+        default="NOT_STARTED"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
