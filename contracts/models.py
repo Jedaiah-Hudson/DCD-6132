@@ -73,6 +73,7 @@ class UserContractProgress(models.Model):
         choices=WorkflowChoices.choices,
         default="NOT_STARTED"
     )
+    notes = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

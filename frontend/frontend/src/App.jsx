@@ -5,6 +5,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import ProfilePage from './pages/ProfilePage';
 import NotificationsPage from './pages/NotificationsPage';
+import ContractDetailPage from './pages/ContractDetailPage';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
       <Route path="/create-account" element={<CreateAccountPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/notifications" element={<NotificationsPage />} />
     </Routes>

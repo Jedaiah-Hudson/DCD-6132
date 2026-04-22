@@ -3,9 +3,14 @@ from unittest.mock import patch
 
 from django.core.management import call_command
 from django.test import TestCase
+from rest_framework import status
+from rest_framework.authtoken.models import Token
+from rest_framework.test import APITestCase
 
+from accounts.models import User
 from contracts.management.services.procurement_ingest import normalize_procurement_record
 from contracts.management.services.sam_api import SamApiError, fetch_sam_opportunities
+from contracts.models import Contract, UserContractProgress
 
 
 class ProcurementIngestTests(TestCase):
@@ -114,3 +119,87 @@ class SamApiErrorHandlingTests(TestCase):
             str(exc.exception),
             "SAM.gov rate limit reached. Try again after 2026-Apr-17 00:00:00 UTC.",
         )
+
+
+class UserContractProgressApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="progress@example.com",
+            password="StrongPass123!",
+        )
+        self.other_user = User.objects.create_user(
+            email="other-progress@example.com",
+            password="StrongPass123!",
+        )
+        self.token = Token.objects.create(user=self.user)
+        self.auth_headers = {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+        self.contract = Contract.objects.create(
+            source="procurement",
+            title="Cloud Support",
+            summary="Cloud support services.",
+            agency="GSA",
+            naics_code="541512",
+            status="Active",
+        )
+
+    def test_summary_counts_only_current_users_tracked_progress(self):
+        UserContractProgress.objects.create(
+            user=self.user,
+            contract=self.contract,
+            contract_progress=UserContractProgress.ProgressChoices.WON,
+        )
+        other_contract = Contract.objects.create(
+            source="procurement",
+            title="Other Contract",
+            summary="Other services.",
+            agency="VA",
+        )
+        UserContractProgress.objects.create(
+            user=self.other_user,
+            contract=other_contract,
+            contract_progress=UserContractProgress.ProgressChoices.LOST,
+        )
+
+        response = self.client.get("/api/contract-progress/summary/", **self.auth_headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["won"], 1)
+        self.assertEqual(response.data["lost"], 0)
+        self.assertEqual(response.data["pending"], 0)
+        self.assertEqual(response.data["tracked"], 1)
+
+    def test_get_progress_creates_default_user_progress_record(self):
+        response = self.client.get(
+            f"/api/contracts/{self.contract.id}/progress/",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["contract"], self.contract.id)
+        self.assertEqual(response.data["contract_progress"], UserContractProgress.ProgressChoices.NONE)
+        self.assertEqual(response.data["notes"], "")
+
+    def test_update_progress_and_notes(self):
+        response = self.client.patch(
+            f"/api/contracts/{self.contract.id}/progress/",
+            {
+                "contract_progress": UserContractProgress.ProgressChoices.LOST,
+                "notes": "No bid after review.",
+            },
+            format="json",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["contract_progress"], UserContractProgress.ProgressChoices.LOST)
+        self.assertEqual(response.data["notes"], "No bid after review.")
+
+    def test_invalid_progress_value_is_rejected(self):
+        response = self.client.patch(
+            f"/api/contracts/{self.contract.id}/progress/",
+            {"contract_progress": "MAYBE"},
+            format="json",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

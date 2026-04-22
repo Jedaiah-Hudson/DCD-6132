@@ -1,4 +1,3 @@
-import Select from 'react-select';
 import { useEffect, useState } from 'react';
 
 export default function NaicsMultiSelect({ value, onChange }) {
@@ -24,27 +23,33 @@ export default function NaicsMultiSelect({ value, onChange }) {
     fetchNaics();
   }, []);
 
-  // convert ["541511"] into select objects
-  const selectedOptions = options.filter((option) =>
-    value.includes(option.value)
-  );
-
   return (
     <div style={{ minWidth: 300 }}>
       <label style={{ display: 'block', marginBottom: 6 }}>
         NAICS Codes
       </label>
 
-      <Select
-        isMulti
-        options={options}
-        value={selectedOptions}
-        onChange={(selected) =>
-          onChange(selected.map((item) => item.value))
+      <select
+        multiple
+        value={value}
+        onChange={(event) =>
+          onChange(Array.from(event.target.selectedOptions, (option) => option.value))
         }
-        placeholder="Select NAICS codes..."
-        classNamePrefix="naics-select"
-      />
+        style={{
+          width: '100%',
+          minHeight: 140,
+          padding: 10,
+          border: '1px solid #cfd4dc',
+          borderRadius: 8,
+          backgroundColor: '#ffffff',
+        }}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

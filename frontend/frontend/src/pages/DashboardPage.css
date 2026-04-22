@@ -125,6 +125,31 @@
     margin-bottom: 36px;
 }
 
+.progress-summary-section {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.progress-summary-card {
+    background-color: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 18px 20px;
+}
+
+.progress-summary-card strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 1.8rem;
+}
+
+.progress-summary-label {
+    color: #4b5563;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
 .section-title {
     font-size: 1.7rem;
     margin-bottom: 18px;
@@ -479,6 +504,10 @@
         grid-template-columns: repeat(2, 1fr);
     }
 
+    .progress-summary-section {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
     .sync-feedback-row {
         flex-direction: column;
         align-items: flex-start;
@@ -508,6 +537,10 @@
     }
 
     .browse-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .progress-summary-section {
         grid-template-columns: 1fr;
     }
 }

@@ -12,3 +12,4 @@ class OpportunitySerializer(serializers.Serializer):
     source = serializers.CharField(allow_blank=True, required=False)
     deadline = serializers.DateTimeField(allow_null=True, required=False)
     hyperlink = serializers.CharField(allow_blank=True, required=False)
+    contract_progress = serializers.CharField(allow_blank=True, required=False)

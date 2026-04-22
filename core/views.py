@@ -14,7 +14,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from rest_framework.views import APIView
 from accounts.models import CapabilityProfile, User
-from contracts.models import Contract, NAICSCode
+from contracts.models import Contract, NAICSCode, UserContractProgress
 from .forms import CapabilityProfileForm
 from .serializers import OpportunitySerializer
 
@@ -427,12 +427,18 @@ class OpportunityListView(APIView):
             if not profile or not profile.naics_codes.exists():
                 return Response([], status=status.HTTP_200_OK)
 
-            user_naics_codes = [
-                code.strip()
-                for code in re.split(r'[\s,;\n]+', profile.naics_codes)
-                if code.strip()
-            ]
+            user_naics_codes = list(profile.naics_codes.values_list('code', flat=True))
             contracts = contracts.filter(naics_code__in=user_naics_codes)
+
+        progress_map = {}
+        if request.user.is_authenticated:
+            progress_map = {
+                progress.contract_id: progress.contract_progress
+                for progress in UserContractProgress.objects.filter(
+                    user=request.user,
+                    contract_id__in=contracts.values_list('id', flat=True),
+                )
+            }
 
         opportunities = [
             {
@@ -446,6 +452,10 @@ class OpportunityListView(APIView):
                 'source': contract.source or '',
                 'deadline': contract.deadline,
                 'hyperlink': contract.hyperlink or '',
+                'contract_progress': progress_map.get(
+                    contract.id,
+                    UserContractProgress.ProgressChoices.NONE,
+                ),
             }
             for contract in contracts
         ]

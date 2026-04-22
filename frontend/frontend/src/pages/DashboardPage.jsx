@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
+const PROGRESS_SUMMARY_API_URL = 'http://127.0.0.1:8000/api/contract-progress/summary/';
 const STATUS_OPTIONS = ['Not Started', 'Reviewing', 'Drafting', 'Submitted'];
 
 const formatLastSynced = () =>
@@ -34,8 +35,9 @@ async function syncSamOpportunities(limit = 10) {
   return data;
 }
 
-async function fetchOpportunities(signal) {
-  const response = await fetch(OPPORTUNITIES_API_URL, { signal });
+async function fetchOpportunities(signal, token) {
+  const headers = token ? { Authorization: `Token ${token}` } : {};
+  const response = await fetch(OPPORTUNITIES_API_URL, { signal, headers });
 
   let data = [];
   try {
@@ -55,6 +57,27 @@ async function fetchOpportunities(signal) {
   return data;
 }
 
+async function fetchProgressSummary(signal, token) {
+  if (!token) {
+    return { won: 0, lost: 0, pending: 0, tracked: 0 };
+  }
+
+  const response = await fetch(PROGRESS_SUMMARY_API_URL, {
+    signal,
+    headers: {
+      Authorization: `Token ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to load progress summary.');
+  }
+
+  return data;
+}
+
 function DashboardPage() {
   const navigate = useNavigate();
   const [hoveredId, setHoveredId] = useState(null);
@@ -67,6 +90,13 @@ function DashboardPage() {
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSynced, setLastSynced] = useState('Not synced yet');
+  const [progressSummary, setProgressSummary] = useState({
+    won: 0,
+    lost: 0,
+    pending: 0,
+    tracked: 0,
+  });
+  const token = localStorage.getItem('token');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -76,8 +106,12 @@ function DashboardPage() {
       setError('');
 
       try {
-        const data = await fetchOpportunities(controller.signal);
+        const [data, summary] = await Promise.all([
+          fetchOpportunities(controller.signal, token),
+          fetchProgressSummary(controller.signal, token),
+        ]);
         setAllOpportunities(data);
+        setProgressSummary(summary);
         setLastSynced(formatLastSynced());
       } catch (fetchError) {
         if (fetchError.name === 'AbortError') {
@@ -101,7 +135,7 @@ function DashboardPage() {
     loadOpportunities();
 
     return () => controller.abort();
-  }, []);
+  }, [token]);
 
   const agencyOptions = useMemo(() => {
     return Array.from(
@@ -191,9 +225,13 @@ function DashboardPage() {
     const result = await syncSamOpportunities(10);
 
     // after sync finishes, reload opportunities from DB
-    const catalogData = await fetchOpportunities();
+    const [catalogData, summaryData] = await Promise.all([
+      fetchOpportunities(undefined, token),
+      fetchProgressSummary(undefined, token),
+    ]);
 
     setAllOpportunities(catalogData);
+    setProgressSummary(summaryData);
     setLastSynced(formatLastSynced());
 
     console.log('Sync result:', result);
@@ -266,6 +304,25 @@ function DashboardPage() {
         <main className="dashboard-content">
           <div className="dashboard-inner">
             <h1 className="page-title">Dashboard</h1>
+
+            <section className="section progress-summary-section">
+              <div className="progress-summary-card">
+                <span className="progress-summary-label">Tracked</span>
+                <strong>{progressSummary.tracked}</strong>
+              </div>
+              <div className="progress-summary-card">
+                <span className="progress-summary-label">Pending</span>
+                <strong>{progressSummary.pending}</strong>
+              </div>
+              <div className="progress-summary-card">
+                <span className="progress-summary-label">Won</span>
+                <strong>{progressSummary.won}</strong>
+              </div>
+              <div className="progress-summary-card">
+                <span className="progress-summary-label">Lost</span>
+                <strong>{progressSummary.lost}</strong>
+              </div>
+            </section>
 
             <section className="section sync-section">
               <div className="sync-header-row">
@@ -385,8 +442,20 @@ function DashboardPage() {
                             {opportunity.status && (
                               <span className="status-tag status-tag-neutral">{opportunity.status}</span>
                             )}
+                            {opportunity.contract_progress && opportunity.contract_progress !== 'NONE' && (
+                              <span className="status-tag status-tag-neutral">
+                                {opportunity.contract_progress}
+                              </span>
+                            )}
                           </div>
                         </div>
+                        <button
+                          className="note-action-button"
+                          type="button"
+                          onClick={() => navigate(`/contracts/${opportunity.id}`)}
+                        >
+                          View Details
+                        </button>
                       </div>
 
                       <p>

@@ -5,7 +5,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import CapabilityProfile, User
 from core.models import Opportunity
-from contracts.models import Contract
+from contracts.models import Contract, NAICSCode
 
 
 class ProfileAccessTests(TestCase):
@@ -157,11 +157,12 @@ class OpportunityApiTests(APITestCase):
         self.assertEqual(response.data[0]['partner'], 'Northwind Systems')
 
     def test_match_user_filters_by_capability_profile_naics_codes(self):
-        CapabilityProfile.objects.create(
+        naics_code = NAICSCode.objects.create(code='541330', title='Engineering Services')
+        profile = CapabilityProfile.objects.create(
             user=self.user,
             company_name='Match Co',
-            naics_codes='541330, 123456',
         )
+        profile.naics_codes.set([naics_code])
 
         response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
 
