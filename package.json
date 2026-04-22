@@ -6,5 +6,8 @@
     "build": "npm --prefix frontend/frontend run build",
     "lint": "npm --prefix frontend/frontend run lint",
     "preview": "npm --prefix frontend/frontend run preview"
+  },
+  "dependencies": {
+    "react-select": "^5.10.2"
   }
 }
