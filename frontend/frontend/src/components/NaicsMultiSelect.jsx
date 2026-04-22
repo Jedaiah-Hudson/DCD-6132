@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Select from 'react-select';
 
 export default function NaicsMultiSelect({ value, onChange }) {
   const [options, setOptions] = useState([]);
@@ -10,7 +11,7 @@ export default function NaicsMultiSelect({ value, onChange }) {
         const data = await res.json();
 
         const formatted = data.map((item) => ({
-          value: item.code,   // use code, not id
+          value: item.code,
           label: `${item.code} - ${item.title}`,
         }));
 
@@ -29,27 +30,15 @@ export default function NaicsMultiSelect({ value, onChange }) {
         NAICS Codes
       </label>
 
-      <select
-        multiple
-        value={value}
-        onChange={(event) =>
-          onChange(Array.from(event.target.selectedOptions, (option) => option.value))
+      <Select
+        isMulti
+        isSearchable
+        options={options}
+        value={options.filter((opt) => value?.includes(opt.value))}
+        onChange={(selected) =>
+          onChange(selected ? selected.map((s) => s.value) : [])
         }
-        style={{
-          width: '100%',
-          minHeight: 140,
-          padding: 10,
-          border: '1px solid #cfd4dc',
-          borderRadius: 8,
-          backgroundColor: '#ffffff',
-        }}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      />
     </div>
   );
 }
