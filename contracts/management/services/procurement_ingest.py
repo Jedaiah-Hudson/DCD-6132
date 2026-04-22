@@ -42,7 +42,7 @@ def normalize_procurement_record(raw_record, source_name):
 
         summary = fetch_description_text(summary_url)
         if not summary:
-            summary = f"{raw_record.get('type', '')} - NAICS {raw_record.get('naicsCode', '')}"
+            summary = "No description Provided"
 
         deadline = raw_record.get("responseDeadLine")
 
