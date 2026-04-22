@@ -465,9 +465,6 @@ function DashboardPage() {
                         <strong>NAICS Code:</strong> {opportunity.naics_code}
                       </p>
                       <p>
-                        <strong>Description:</strong> {opportunity.description || 'No description provided.'}
-                      </p>
-                      <p>
                         <strong>Status:</strong> {opportunity.status || 'Not Started'}
                       </p>
                     </div>
