@@ -94,6 +94,69 @@ def _serialize_contract(contract):
         "updated_at": contract.updated_at.isoformat() if contract.updated_at else None,
     }
 
+from django.http import JsonResponse
+from .models import Contract
+
+
+def contract_dropdown(request):
+    contracts = Contract.objects.all().order_by("-deadline")
+
+    data = [
+        {
+            "id": c.id,
+            "title": c.title,
+        }
+        for c in contracts
+    ]
+
+    return JsonResponse({"contracts": data})
+# views.py
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+from .models import Contract
+from accounts.models import CapabilityProfile
+from .management.services.openai_service import generate_rfp_response
+from .management.services.prompt_builder import build_capability_profile_text
+
+
+@api_view(["POST"])
+def generate_draft(request):
+    user = request.user
+    contract_id = request.data.get("contract_id")
+
+    # 1. Get contract
+    contract = Contract.objects.get(id=contract_id)
+
+    # 2. Get user's capability profile (latest one)
+    profile = CapabilityProfile.objects.order_by("-updated_at").first()
+
+    if not profile:
+        return Response({"error": "No capability profile found"}, status=400)
+
+    # 3. Convert profile → clean text
+    capability_text = build_capability_profile_text(profile)
+
+    # 4. Generate AI response
+    ai_output = generate_rfp_response(
+        contract_text = f"""
+            Contract Title: {contract.title}
+            Agency: {contract.agency}
+            Sub-agency: {contract.sub_agency}
+            Summary: {contract.summary}
+            NAICS Code: {contract.naics_code}
+            Deadline: {contract.deadline}
+            """,
+        capability_text=capability_text
+    )
+    
+
+    # 5. Return only (no saving)
+    return Response({
+        "contract_title": contract.title,
+        "generated_text": ai_output
+    })
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
