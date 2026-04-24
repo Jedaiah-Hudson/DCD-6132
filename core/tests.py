@@ -69,6 +69,7 @@ class OpportunityApiTests(APITestCase):
             agency='DoD',
             status='Reviewing',
             partner_name='Northwind Systems',
+            category='engineering',
         )
         Contract.objects.create(
             source='procurement',
@@ -110,9 +111,18 @@ class OpportunityApiTests(APITestCase):
         self.assertIn('title', response.data[0])
         self.assertIn('description', response.data[0])
         self.assertIn('naics_code', response.data[0])
+        self.assertIn('naics_category', response.data[0])
         self.assertIn('agency', response.data[0])
         self.assertIn('status', response.data[0])
         self.assertIn('partner', response.data[0])
+        self.assertIn('contract_progress', response.data[0])
+        self.assertIn('workflow_status', response.data[0])
+
+    def test_opportunity_payload_includes_naics_category(self):
+        response = self.client.get('/api/opportunities/?search=cyber')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]['naics_category'], 'engineering')
 
     def test_search_by_keyword(self):
         response = self.client.get('/api/opportunities/?search=cloud')

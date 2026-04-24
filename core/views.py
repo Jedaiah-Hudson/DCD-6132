@@ -15,6 +15,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.views import APIView
 from accounts.models import CapabilityProfile, User
 from contracts.models import Contract, NAICSCode, UserContractProgress
+from contracts.management.services.naics_utils import get_category_for_naics
 from .forms import CapabilityProfileForm
 from .serializers import OpportunitySerializer
 
@@ -433,32 +434,55 @@ class OpportunityListView(APIView):
         progress_map = {}
         if request.user.is_authenticated:
             progress_map = {
-                progress.contract_id: progress.contract_progress
+                progress.contract_id: {
+                    'contract_progress': progress.contract_progress,
+                    'workflow_status': progress.workflow_status,
+                }
                 for progress in UserContractProgress.objects.filter(
                     user=request.user,
                     contract_id__in=contracts.values_list('id', flat=True),
                 )
             }
 
-        opportunities = [
-            {
-                'id': contract.id,
-                'title': contract.title,
-                'description': contract.summary or '',
-                'naics_code': contract.naics_code or '',
-                'agency': contract.agency or '',
-                'status': contract.status or '',
-                'partner': contract.partner_name or '',
-                'source': contract.source or '',
-                'deadline': contract.deadline,
-                'hyperlink': contract.hyperlink or '',
-                'contract_progress': progress_map.get(
-                    contract.id,
-                    UserContractProgress.ProgressChoices.NONE,
-                ),
-            }
-            for contract in contracts
-        ]
+        naics_codes = [code for code in contracts.values_list('naics_code', flat=True) if code]
+        naics_category_map = {
+            item['code']: item['broad_category']
+            for item in NAICSCode.objects.filter(code__in=naics_codes).values('code', 'broad_category')
+        }
+
+        opportunities = []
+        for contract in contracts:
+            naics_code_value = contract.naics_code or ''
+            naics_category = (
+                contract.category
+                or naics_category_map.get(naics_code_value)
+                or get_category_for_naics(naics_code_value)
+                or ''
+            )
+
+            opportunities.append(
+                {
+                    'id': contract.id,
+                    'title': contract.title,
+                    'description': contract.summary or '',
+                    'naics_code': naics_code_value,
+                    'naics_category': naics_category,
+                    'agency': contract.agency or '',
+                    'status': contract.status or '',
+                    'partner': contract.partner_name or '',
+                    'source': contract.source or '',
+                    'deadline': contract.deadline,
+                    'hyperlink': contract.hyperlink or '',
+                    'contract_progress': progress_map.get(contract.id, {}).get(
+                        'contract_progress',
+                        UserContractProgress.ProgressChoices.NONE,
+                    ),
+                    'workflow_status': progress_map.get(contract.id, {}).get(
+                        'workflow_status',
+                        UserContractProgress.WorkflowChoices.NOT_STARTED,
+                    ),
+                }
+            )
 
         serializer = OpportunitySerializer(opportunities, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
