@@ -13,3 +13,13 @@ db.sqlite3
 
 # macOS
 .DS_Store
+
+node_modules/
+frontend/frontend/node_modules/
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+.env
+dist/
+.vite/
