@@ -358,8 +358,59 @@
   color: #92400e;
 }
 
+.profile-linked-email-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.linked-email-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.linked-email-card {
+  background-color: #ffffff;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 20px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.linked-email-address,
+.linked-email-label-text,
+.linked-email-empty {
+  margin: 0;
+}
+
+.linked-email-address {
+  font-weight: 600;
+  color: #111827;
+}
+
+.linked-email-label-text,
+.linked-email-empty {
+  color: #475569;
+  margin-top: 4px;
+}
+
 @media (max-width: 720px) {
+  .profile-linked-email-form {
+    grid-template-columns: 1fr;
+  }
+
   .mailbox-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .linked-email-card {
     flex-direction: column;
     align-items: flex-start;
   }

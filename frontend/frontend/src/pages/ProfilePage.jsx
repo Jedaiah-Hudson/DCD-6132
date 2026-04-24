@@ -3,11 +3,8 @@ import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
 import NaicsMultiSelect from '../components/NaicsMultiSelect';
 
-const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf', '.docx'];
-const ACCEPTED_DOCUMENT_MIME_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-];
+const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf'];
+const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf'];
 
 function getFileExtension(filename) {
   const normalizedName = String(filename || '').toLowerCase();
@@ -73,6 +70,11 @@ function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [extractedText, setExtractedText] = useState('');
   const [mailboxConnections, setMailboxConnections] = useState(defaultMailboxConnections);
+  const [linkedEmails, setLinkedEmails] = useState([]);
+  const [linkedEmailInput, setLinkedEmailInput] = useState('');
+  const [linkedEmailLabel, setLinkedEmailLabel] = useState('');
+  const [isSavingLinkedEmail, setIsSavingLinkedEmail] = useState(false);
+  const [removingLinkedEmailId, setRemovingLinkedEmailId] = useState(null);
 
   const token = localStorage.getItem('token');
 
@@ -109,23 +111,37 @@ function ProfilePage() {
       if (!token) return;
 
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/profile/', {
-          method: 'GET',
-          headers: {
-            Authorization: `Token ${token}`,
-          },
-        });
+        const headers = {
+          Authorization: `Token ${token}`,
+        };
+        const [profileResponse, linkedEmailsResponse] = await Promise.all([
+          fetch('http://127.0.0.1:8000/api/profile/', {
+            method: 'GET',
+            headers,
+          }),
+          fetch('http://127.0.0.1:8000/accounts/linked-emails/', {
+            method: 'GET',
+            headers,
+          }),
+        ]);
 
-        const data = await response.json();
+        const profileData = await profileResponse.json();
+        const linkedEmailsData = await linkedEmailsResponse.json();
 
-        if (!response.ok) {
-          setUploadError(data.message || 'Failed to load profile.');
+        if (!profileResponse.ok) {
+          setUploadError(profileData.message || 'Failed to load profile.');
           return;
         }
 
-        fillProfileFields(data.profile || data || {});
-        setEditing(Boolean(data.editing));
-        setLastProcessedFile(data.processed_file_name || 'None');
+        if (!linkedEmailsResponse.ok) {
+          setUploadError(linkedEmailsData.error || 'Failed to load linked emails.');
+          return;
+        }
+
+        fillProfileFields(profileData.profile || profileData || {});
+        setEditing(Boolean(profileData.editing));
+        setLastProcessedFile(profileData.processed_file_name || 'None');
+        setLinkedEmails(linkedEmailsData.emails || []);
       } catch (error) {
         setUploadError('Could not load saved profile.');
       }
@@ -139,7 +155,7 @@ function ProfilePage() {
 
     if (file && !isAcceptedDocument(file)) {
       setSelectedFile(null);
-      setUploadError('Please upload a PDF or DOCX file.');
+      setUploadError('Please upload a PDF file.');
       setSuccessMessage('');
       e.target.value = '';
       return;
@@ -152,12 +168,7 @@ function ProfilePage() {
 
   const handleExtractPrefill = async () => {
     if (!selectedFile) {
-      setUploadError('Please choose a PDF or DOCX file first.');
-      return;
-    }
-
-    if (!isPdfDocument(selectedFile)) {
-      setUploadError('DOCX files are allowed, but automatic extract + prefill currently works with PDF only.');
+      setUploadError('Please choose a PDF file first.');
       return;
     }
 
@@ -260,6 +271,76 @@ function ProfilePage() {
     setUploadError('');
   };
 
+  const handleAddLinkedEmail = async () => {
+    if (!linkedEmailInput.trim()) {
+      setUploadError('Enter an email address to add.');
+      return;
+    }
+
+    setIsSavingLinkedEmail(true);
+    setUploadError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/accounts/linked-emails/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify({
+          email: linkedEmailInput,
+          label: linkedEmailLabel,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setUploadError(data.error || 'Failed to add linked email.');
+        return;
+      }
+
+      setLinkedEmails((currentEmails) => [...currentEmails, data.email]);
+      setLinkedEmailInput('');
+      setLinkedEmailLabel('');
+      setSuccessMessage(data.message || 'Email added successfully.');
+    } catch (error) {
+      setUploadError('Could not connect to the server.');
+    } finally {
+      setIsSavingLinkedEmail(false);
+    }
+  };
+
+  const handleRemoveLinkedEmail = async (emailId) => {
+    setRemovingLinkedEmailId(emailId);
+    setUploadError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/accounts/linked-emails/${emailId}/`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Token ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setUploadError(data.error || 'Failed to remove linked email.');
+        return;
+      }
+
+      setLinkedEmails((currentEmails) => currentEmails.filter((email) => email.id !== emailId));
+      setSuccessMessage(data.message || 'Email removed successfully.');
+    } catch (error) {
+      setUploadError('Could not connect to the server.');
+    } finally {
+      setRemovingLinkedEmailId(null);
+    }
+  };
+
   return (
     <div className="profile-layout">
       <aside className="profile-sidebar">
@@ -359,6 +440,61 @@ function ProfilePage() {
                     </span>
                   </div>
                 ))}
+              </div>
+            </section>
+
+            <section className="profile-section-card">
+              <h2 className="profile-section-title">Linked Emails</h2>
+              <p className="profile-section-description">
+                Add extra inboxes so opportunities can be compiled in one place for your account.
+              </p>
+
+              <div className="profile-linked-email-form">
+                <input
+                  type="email"
+                  value={linkedEmailInput}
+                  onChange={(e) => setLinkedEmailInput(e.target.value)}
+                  className="profile-input"
+                  placeholder="name@example.com"
+                />
+                <input
+                  type="text"
+                  value={linkedEmailLabel}
+                  onChange={(e) => setLinkedEmailLabel(e.target.value)}
+                  className="profile-input"
+                  placeholder="Label (optional)"
+                />
+                <button
+                  className="profile-dark-button"
+                  onClick={handleAddLinkedEmail}
+                  disabled={isSavingLinkedEmail}
+                  type="button"
+                >
+                  {isSavingLinkedEmail ? 'Adding...' : 'Add Email'}
+                </button>
+              </div>
+
+              <div className="linked-email-list">
+                {linkedEmails.length === 0 ? (
+                  <p className="linked-email-empty">No linked emails yet.</p>
+                ) : (
+                  linkedEmails.map((linkedEmail) => (
+                    <div key={linkedEmail.id} className="linked-email-card">
+                      <div>
+                        <p className="linked-email-address">{linkedEmail.email}</p>
+                        <p className="linked-email-label-text">{linkedEmail.label || 'No label'}</p>
+                      </div>
+                      <button
+                        className="profile-light-button"
+                        type="button"
+                        onClick={() => handleRemoveLinkedEmail(linkedEmail.id)}
+                        disabled={removingLinkedEmailId === linkedEmail.id}
+                      >
+                        {removingLinkedEmailId === linkedEmail.id ? 'Removing...' : 'Remove'}
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </section>
 
@@ -527,13 +663,13 @@ function ProfilePage() {
             <div className="profile-modal-body">
               <input
                 type="file"
-                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".pdf,application/pdf"
                 onChange={handleFileChange}
               />
               <p className="profile-modal-file-name">
                 {selectedFile ? selectedFile.name : 'No file selected'}
               </p>
-              <p className="profile-modal-file-name">Accepted formats: PDF, DOCX</p>
+              <p className="profile-modal-file-name">Accepted format: PDF</p>
             </div>
 
             <div className="profile-modal-actions">
