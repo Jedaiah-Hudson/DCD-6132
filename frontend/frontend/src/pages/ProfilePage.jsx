@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
 import NaicsMultiSelect from '../components/NaicsMultiSelect';
@@ -6,23 +6,6 @@ import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf'];
 const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf'];
-
-const defaultMailboxConnections = [
-  {
-    id: 'default-gmail',
-    provider: 'Gmail',
-    email: 'contracts@pinkstem.org',
-    status: 'Connected',
-    lastSynced: 'Not synced yet',
-  },
-  {
-    id: 'default-outlook',
-    provider: 'Outlook',
-    email: 'opportunities@pinkstem.org',
-    status: 'Needs attention',
-    lastSynced: 'Not synced yet',
-  },
-];
 
 function getFileExtension(filename) {
   const normalizedName = String(filename || '').toLowerCase();
@@ -88,8 +71,7 @@ function ProfilePage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [editing, setEditing] = useState(false);
   const [extractedText, setExtractedText] = useState('');
-  const [mailboxConnections, setMailboxConnections] = useState(defaultMailboxConnections);
-  const linkedEmailsSectionRef = useRef(null);
+  const [mailboxUiState, setMailboxUiState] = useState({});
   const [linkedEmails, setLinkedEmails] = useState([]);
   const [linkedEmailInput, setLinkedEmailInput] = useState('');
   const [linkedEmailLabel, setLinkedEmailLabel] = useState('');
@@ -99,22 +81,15 @@ function ProfilePage() {
   const token = localStorage.getItem('token');
   const unreadCount = useNotificationSummary();
 
-  const mailboxRows = useMemo(() => {
-    const dynamicMailboxRows = linkedEmails.map((linkedEmail) => ({
-      id: `linked-${linkedEmail.id}`,
-      provider: inferMailboxProvider(linkedEmail.email),
-      email: linkedEmail.email,
-      status: 'Needs attention',
-      lastSynced: 'Not synced yet',
-    }));
-
-    const rowMap = new Map();
-    [...defaultMailboxConnections, ...dynamicMailboxRows, ...mailboxConnections].forEach((row) => {
-      rowMap.set(row.email, row);
-    });
-
-    return Array.from(rowMap.values());
-  }, [linkedEmails, mailboxConnections]);
+  const mailboxRows = useMemo(() => linkedEmails.map((linkedEmail) => ({
+    id: `linked-${linkedEmail.id}`,
+    linkedEmailId: linkedEmail.id,
+    provider: inferMailboxProvider(linkedEmail.email),
+    email: linkedEmail.email,
+    label: linkedEmail.label || '',
+    status: mailboxUiState[linkedEmail.id]?.status || 'Needs attention',
+    lastSynced: mailboxUiState[linkedEmail.id]?.lastSynced || 'Not synced yet',
+  })), [linkedEmails, mailboxUiState]);
 
   const structuredData = {
     company_name: companyName,
@@ -278,46 +253,29 @@ function ProfilePage() {
     }
   };
 
-  const handleConnectMailbox = (email, provider) => {
-    setMailboxConnections((currentConnections) => {
-      const existingConnection = currentConnections.find((connection) => connection.email === email);
-
-      if (existingConnection) {
-        return currentConnections.map((connection) => (
-          connection.email === email
-            ? { ...connection, provider, status: 'Connected' }
-            : connection
-        ));
-      }
-
-      return [
-        ...currentConnections,
-        {
-          id: `mailbox-${Date.now()}`,
-          provider,
-          email,
-          status: 'Connected',
-          lastSynced: 'Not synced yet',
-        },
-      ];
-    });
+  const handleConnectMailbox = (linkedEmailId, email, provider) => {
+    setMailboxUiState((currentState) => ({
+      ...currentState,
+      [linkedEmailId]: {
+        ...(currentState[linkedEmailId] || {}),
+        status: 'Connected',
+      },
+    }));
 
     setSuccessMessage(`${provider} mailbox connected for ${email}.`);
     setUploadError('');
   };
 
-  const handleSyncMailbox = (email) => {
-    setMailboxConnections((currentConnections) => currentConnections.map((connection) => (
-      connection.email === email
-        ? { ...connection, lastSynced: formatMailboxSyncTime() }
-        : connection
-    )));
+  const handleSyncMailbox = (linkedEmailId, email) => {
+    setMailboxUiState((currentState) => ({
+      ...currentState,
+      [linkedEmailId]: {
+        ...(currentState[linkedEmailId] || {}),
+        lastSynced: formatMailboxSyncTime(),
+      },
+    }));
     setSuccessMessage(`Mailbox sync requested for ${email}.`);
     setUploadError('');
-  };
-
-  const scrollToLinkedEmails = () => {
-    linkedEmailsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleAddLinkedEmail = async () => {
@@ -457,21 +415,17 @@ function ProfilePage() {
                     Connect Gmail or Outlook mailboxes to pull in opportunity emails and manage connection and sync status beside each email.
                   </p>
                 </div>
-                <button
-                  className="profile-dark-button"
-                  type="button"
-                  onClick={scrollToLinkedEmails}
-                >
-                  Add Email
-                </button>
               </div>
 
               <div className="mailbox-list">
-                {mailboxRows.map((mailbox) => (
+                {mailboxRows.length === 0 ? (
+                  <p className="linked-email-empty">Add an email below to populate mailbox connections.</p>
+                ) : mailboxRows.map((mailbox) => (
                   <div key={mailbox.id} className="mailbox-card mailbox-card-with-actions">
                     <div>
                       <h3 className="mailbox-provider">{mailbox.provider}</h3>
                       <p className="mailbox-email">{mailbox.email}</p>
+                      <p className="linked-email-label-text">{mailbox.label || 'No label'}</p>
                       <p className="mailbox-sync-meta">Last synced: {mailbox.lastSynced || 'Not synced yet'}</p>
                     </div>
                     <div className="mailbox-actions-column">
@@ -479,14 +433,14 @@ function ProfilePage() {
                         <button
                           className="profile-light-button mailbox-action-button"
                           type="button"
-                          onClick={() => handleConnectMailbox(mailbox.email, mailbox.provider)}
+                          onClick={() => handleConnectMailbox(mailbox.linkedEmailId, mailbox.email, mailbox.provider)}
                         >
                           Connect
                         </button>
                         <button
                           className="profile-dark-button mailbox-action-button"
                           type="button"
-                          onClick={() => handleSyncMailbox(mailbox.email)}
+                          onClick={() => handleSyncMailbox(mailbox.linkedEmailId, mailbox.email)}
                         >
                           Sync
                         </button>
@@ -500,7 +454,7 @@ function ProfilePage() {
               </div>
             </section>
 
-            <section className="profile-section-card" ref={linkedEmailsSectionRef}>
+            <section className="profile-section-card">
               <h2 className="profile-section-title">Linked Emails</h2>
               <p className="profile-section-description">
                 Add extra inboxes so opportunities can be compiled in one place for your account.
