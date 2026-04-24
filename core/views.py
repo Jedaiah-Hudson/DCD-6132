@@ -47,6 +47,21 @@ PROFILE_KEYS = [
 ]
 
 
+def normalize_contract_status(value):
+    normalized = (value or '').strip().lower()
+
+    if normalized in {'yes', 'active'}:
+        return 'Active'
+
+    if normalized in {'no', 'inactive'}:
+        return 'Inactive'
+
+    if normalized:
+        return value
+
+    return ''
+
+
 def extract_text_from_pdf(uploaded_file):
     uploaded_file.seek(0)
     pdf_bytes = uploaded_file.read()
@@ -405,7 +420,14 @@ class OpportunityListView(APIView):
             contracts = contracts.filter(agency__iexact=agency)
 
         if status_value:
-            contracts = contracts.filter(status__iexact=status_value)
+            normalized_status = status_value.lower()
+
+            if normalized_status == 'active':
+                contracts = contracts.filter(Q(status__iexact='active') | Q(status__iexact='yes'))
+            elif normalized_status == 'inactive':
+                contracts = contracts.filter(Q(status__iexact='inactive') | Q(status__iexact='no'))
+            else:
+                contracts = contracts.filter(status__iexact=status_value)
 
         if search:
             contracts = contracts.filter(
@@ -468,7 +490,7 @@ class OpportunityListView(APIView):
                     'naics_code': naics_code_value,
                     'naics_category': naics_category,
                     'agency': contract.agency or '',
-                    'status': contract.status or '',
+                    'status': normalize_contract_status(contract.status),
                     'partner': contract.partner_name or '',
                     'source': contract.source or '',
                     'deadline': contract.deadline,
