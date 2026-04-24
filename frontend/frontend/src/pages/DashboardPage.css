@@ -304,6 +304,7 @@
 }
 
 .contract-tag,
+.info-pill,
 .partner-pill,
 .source-label,
 .status-tag {
@@ -315,9 +316,146 @@
     font-weight: 600;
 }
 
+.info-pill {
+    min-width: 112px;
+    min-height: 32px;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
 .contract-tag {
     background-color: #1e293b;
     color: white;
+}
+
+.agency-pill {
+    background-color: #e5e7eb;
+    border: 1px solid #d1d5db;
+    color: #374151;
+}
+
+.naics-tag {
+    border: 1px solid transparent;
+}
+
+.naics-tag-green {
+    background-color: #dcfce7;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.naics-tag-amber {
+    background-color: #fef3c7;
+    border-color: #fcd34d;
+    color: #92400e;
+}
+
+.naics-tag-cyan {
+    background-color: #cffafe;
+    border-color: #67e8f9;
+    color: #155e75;
+}
+
+.naics-tag-orange {
+    background-color: #ffedd5;
+    border-color: #fdba74;
+    color: #9a3412;
+}
+
+.naics-tag-indigo {
+    background-color: #e0e7ff;
+    border-color: #a5b4fc;
+    color: #3730a3;
+}
+
+.naics-tag-slate {
+    background-color: #e2e8f0;
+    border-color: #cbd5e1;
+    color: #334155;
+}
+
+.naics-tag-pink {
+    background-color: #fce7f3;
+    border-color: #f9a8d4;
+    color: #9d174d;
+}
+
+.naics-tag-teal {
+    background-color: #ccfbf1;
+    border-color: #5eead4;
+    color: #115e59;
+}
+
+.naics-tag-blue {
+    background-color: #dbeafe;
+    border-color: #93c5fd;
+    color: #1e40af;
+}
+
+.naics-tag-violet {
+    background-color: #ede9fe;
+    border-color: #c4b5fd;
+    color: #5b21b6;
+}
+
+.naics-tag-sky {
+    background-color: #e0f2fe;
+    border-color: #7dd3fc;
+    color: #075985;
+}
+
+.naics-tag-emerald {
+    background-color: #d1fae5;
+    border-color: #6ee7b7;
+    color: #065f46;
+}
+
+.naics-tag-lime {
+    background-color: #ecfccb;
+    border-color: #bef264;
+    color: #3f6212;
+}
+
+.naics-tag-purple {
+    background-color: #f3e8ff;
+    border-color: #d8b4fe;
+    color: #6b21a8;
+}
+
+.naics-tag-rose {
+    background-color: #ffe4e6;
+    border-color: #fda4af;
+    color: #9f1239;
+}
+
+.naics-tag-gray {
+    background-color: #f3f4f6;
+    border-color: #d1d5db;
+    color: #374151;
+}
+
+.naics-tag-yellow {
+    background-color: #fef9c3;
+    border-color: #fde047;
+    color: #854d0e;
+}
+
+.naics-tag-red {
+    background-color: #fee2e2;
+    border-color: #fca5a5;
+    color: #991b1b;
+}
+
+.naics-tag-stone {
+    background-color: #e7e5e4;
+    border-color: #d6d3d1;
+    color: #44403c;
+}
+
+.naics-tag-fuchsia {
+    background-color: #fae8ff;
+    border-color: #f0abfc;
+    color: #86198f;
 }
 
 .partner-pill {
@@ -340,28 +478,45 @@
     flex-shrink: 0;
 }
 
-.status-tag {
-    margin-top: 10px;
-}
-
+.status-color-gray,
 .status-tag-neutral {
     background-color: #e5e7eb;
+    border: 1px solid #d1d5db;
     color: #374151;
 }
 
+.status-color-amber,
 .status-tag-reviewing {
     background-color: #fef3c7;
+    border: 1px solid #fcd34d;
     color: #92400e;
 }
 
+.status-color-blue,
 .status-tag-drafting {
     background-color: #dbeafe;
+    border: 1px solid #93c5fd;
     color: #1d4ed8;
 }
 
+.status-color-green,
 .status-tag-submitted {
     background-color: #dcfce7;
+    border: 1px solid #86efac;
     color: #166534;
+}
+
+.status-color-red {
+    background-color: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #991b1b;
+}
+
+.tracking-tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 8px;
 }
 
 .notes-section {

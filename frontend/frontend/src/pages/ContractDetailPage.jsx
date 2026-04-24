@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import './DashboardPage.css';
 import './ContractDetailPage.css';
 
@@ -10,6 +10,74 @@ const PROGRESS_OPTIONS = [
   { value: 'WON', label: 'Won' },
   { value: 'LOST', label: 'Lost' },
 ];
+const WORKFLOW_OPTIONS = [
+  { value: 'NOT_STARTED', label: 'Not Started' },
+  { value: 'REVIEWING', label: 'Reviewing' },
+  { value: 'DRAFTING', label: 'Drafting' },
+  { value: 'SUBMITTED', label: 'Submitted' },
+];
+const PROGRESS_STATUS_COLORS = {
+  NONE: 'gray',
+  PENDING: 'amber',
+  WON: 'green',
+  LOST: 'red',
+};
+const WORKFLOW_STATUS_COLORS = {
+  NOT_STARTED: 'gray',
+  REVIEWING: 'amber',
+  DRAFTING: 'blue',
+  SUBMITTED: 'green',
+};
+const LISTING_STATUS_COLORS = {
+  active: 'green',
+  inactive: 'gray',
+  unknown: 'gray',
+  yes: 'green',
+  no: 'gray',
+};
+const NAICS_CATEGORY_COLORS = {
+  construction: 'orange',
+  manufacturing: 'indigo',
+  transportation_logistics: 'teal',
+  information: 'blue',
+  software: 'violet',
+  software_it: 'violet',
+  it_services: 'violet',
+  professional_services: 'purple',
+  engineering: 'blue',
+  management_consulting: 'rose',
+  consulting: 'rose',
+  administrative_support: 'gray',
+  education: 'yellow',
+  healthcare: 'red',
+  healthcare_social_assistance: 'red',
+  public_administration: 'slate',
+  aerospace: 'sky',
+  other: 'gray',
+};
+
+function getProgressOptionClass(value, selectedValue) {
+  const colorName = PROGRESS_STATUS_COLORS[value] || 'gray';
+  const activeClass = selectedValue === value ? 'progress-option-active' : '';
+  return `progress-option progress-option-${colorName} ${activeClass}`.trim();
+}
+
+function getWorkflowBadgeClass(status) {
+  const colorName = WORKFLOW_STATUS_COLORS[status] || 'gray';
+  return `status-tag status-color-${colorName}`;
+}
+
+function getListingStatusClass(status) {
+  const normalizedStatus = String(status || 'unknown').trim().toLowerCase();
+  const colorName = LISTING_STATUS_COLORS[normalizedStatus] || 'gray';
+  return `info-pill status-color-${colorName}`;
+}
+
+function getNaicsCategoryClass(category) {
+  const normalizedCategory = String(category || 'other').trim().toLowerCase();
+  const colorName = NAICS_CATEGORY_COLORS[normalizedCategory] || 'gray';
+  return `info-pill naics-tag naics-tag-${colorName}`;
+}
 
 function formatDate(value) {
   if (!value) {
@@ -28,6 +96,8 @@ function formatDate(value) {
 function ContractDetailPage() {
   const { contractId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const dashboardReturn = location.state?.dashboardReturn;
   const token = localStorage.getItem('token');
   const [contract, setContract] = useState(null);
   const [contractProgress, setContractProgress] = useState('NONE');
@@ -124,6 +194,12 @@ function ContractDetailPage() {
     }
   };
 
+  const handleBackToDashboard = () => {
+    navigate('/dashboard', {
+      state: dashboardReturn ? { restoreDashboard: dashboardReturn } : undefined,
+    });
+  };
+
   return (
     <div className="dashboard-layout">
       <aside className="sidebar">
@@ -148,7 +224,7 @@ function ContractDetailPage() {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <button className="notes-cancel-button" onClick={() => navigate('/dashboard')}>
+            <button className="notes-cancel-button" onClick={handleBackToDashboard}>
               Back to Dashboard
             </button>
             <div className="topbar-icons">
@@ -198,7 +274,11 @@ function ContractDetailPage() {
                     </div>
                     <div>
                       <span className="detail-label">NAICS</span>
-                      <p>{contract.naics_code || 'Not provided'}</p>
+                      <p>
+                        <span className={getNaicsCategoryClass(contract.category)}>
+                          {contract.naics_code || 'Not provided'}
+                        </span>
+                      </p>
                     </div>
                     <div>
                       <span className="detail-label">Deadline</span>
@@ -210,7 +290,11 @@ function ContractDetailPage() {
                     </div>
                     <div>
                       <span className="detail-label">Status</span>
-                      <p>{contract.status || 'Not provided'}</p>
+                      <p>
+                        <span className={getListingStatusClass(contract.status)}>
+                          {contract.status || 'Unknown'}
+                        </span>
+                      </p>
                     </div>
                   </div>
 
@@ -232,7 +316,7 @@ function ContractDetailPage() {
                     {PROGRESS_OPTIONS.map((option) => (
                       <label
                         key={option.value}
-                        className={`progress-option ${contractProgress === option.value ? 'progress-option-active' : ''}`}
+                        className={getProgressOptionClass(option.value, contractProgress)}
                       >
                         <input
                           type="radio"
@@ -255,11 +339,15 @@ function ContractDetailPage() {
                     value={workflowStatus}
                     onChange={(event) => setWorkflowStatus(event.target.value)}
                   >
-                    <option value="NOT_STARTED">Not Started</option>
-                    <option value="REVIEWING">Reviewing</option>
-                    <option value="DRAFTING">Drafting</option>
-                    <option value="SUBMITTED">Submitted</option>
+                    {WORKFLOW_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
+                  <span className={getWorkflowBadgeClass(workflowStatus)}>
+                    {WORKFLOW_OPTIONS.find((option) => option.value === workflowStatus)?.label || workflowStatus}
+                  </span>
 
                   <label className="status-label" htmlFor="contractNotes">
                     Notes
