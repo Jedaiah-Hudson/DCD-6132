@@ -3,6 +3,37 @@ import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
 import NaicsMultiSelect from '../components/NaicsMultiSelect';
 
+const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf', '.docx'];
+const ACCEPTED_DOCUMENT_MIME_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+function getFileExtension(filename) {
+  const normalizedName = String(filename || '').toLowerCase();
+  const extensionIndex = normalizedName.lastIndexOf('.');
+  return extensionIndex >= 0 ? normalizedName.slice(extensionIndex) : '';
+}
+
+function isAcceptedDocument(file) {
+  if (!file) {
+    return false;
+  }
+
+  return (
+    ACCEPTED_DOCUMENT_EXTENSIONS.includes(getFileExtension(file.name))
+    || ACCEPTED_DOCUMENT_MIME_TYPES.includes(file.type)
+  );
+}
+
+function isPdfDocument(file) {
+  if (!file) {
+    return false;
+  }
+
+  return getFileExtension(file.name) === '.pdf' || file.type === 'application/pdf';
+}
+
 const defaultMailboxConnections = [
   {
     id: 1,
@@ -105,6 +136,15 @@ function ProfilePage() {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
+
+    if (file && !isAcceptedDocument(file)) {
+      setSelectedFile(null);
+      setUploadError('Please upload a PDF or DOCX file.');
+      setSuccessMessage('');
+      e.target.value = '';
+      return;
+    }
+
     setSelectedFile(file || null);
     setUploadError('');
     setSuccessMessage('');
@@ -112,7 +152,12 @@ function ProfilePage() {
 
   const handleExtractPrefill = async () => {
     if (!selectedFile) {
-      setUploadError('Please choose a PDF first.');
+      setUploadError('Please choose a PDF or DOCX file first.');
+      return;
+    }
+
+    if (!isPdfDocument(selectedFile)) {
+      setUploadError('DOCX files are allowed, but automatic extract + prefill currently works with PDF only.');
       return;
     }
 
@@ -135,7 +180,7 @@ function ProfilePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setUploadError(data.message || 'Failed to process PDF.');
+        setUploadError(data.message || 'Failed to process document.');
         setIsUploading(false);
         return;
       }
@@ -480,10 +525,15 @@ function ProfilePage() {
             <h2 className="profile-modal-title">Upload Capability Document</h2>
 
             <div className="profile-modal-body">
-              <input type="file" accept=".pdf" onChange={handleFileChange} />
+              <input
+                type="file"
+                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleFileChange}
+              />
               <p className="profile-modal-file-name">
                 {selectedFile ? selectedFile.name : 'No file selected'}
               </p>
+              <p className="profile-modal-file-name">Accepted formats: PDF, DOCX</p>
             </div>
 
             <div className="profile-modal-actions">

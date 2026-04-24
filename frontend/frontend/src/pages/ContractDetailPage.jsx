@@ -266,7 +266,6 @@ function ContractDetailPage() {
                 <h1 className="page-title">{contract.title}</h1>
 
                 {error && <div className="state-card state-card-error detail-message">{error}</div>}
-                {successMessage && <div className="state-card detail-success-message">{successMessage}</div>}
 
                 <section className="section detail-section">
                   <h2 className="section-title">Contract Details</h2>
@@ -319,6 +318,7 @@ function ContractDetailPage() {
 
                 <section className="section detail-section">
                   <h2 className="section-title">Progress</h2>
+                  {successMessage && <div className="state-card detail-success-message">{successMessage}</div>}
                   <div className="progress-control-group">
                     {PROGRESS_OPTIONS.map((option) => (
                       <label
