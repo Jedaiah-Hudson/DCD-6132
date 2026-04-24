@@ -1,5 +1,183 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <h1>Profile</h1>
-<p>Your profile information will show here.</p>
+<p>Enter your profile manually anytime, and optionally use PDF OCR to pre-fill fields.</p>
+
+<h2>Capability Profile</h2>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <p>{{ profile_form.capability_pdf.label_tag }} {{ profile_form.capability_pdf }}</p>
+    {% if profile_form.capability_pdf.errors %}
+    <p style="color: red;">{{ profile_form.capability_pdf.errors }}</p>
+    {% endif %}
+
+    <p>{{ profile_form.company_name.label_tag }} {{ profile_form.company_name }}</p>
+    <p>{{ profile_form.capability_summary.label_tag }} {{ profile_form.capability_summary }}</p>
+    <p>{{ profile_form.core_competencies.label_tag }} {{ profile_form.core_competencies }}</p>
+    <p>{{ profile_form.differentiators.label_tag }} {{ profile_form.differentiators }}</p>
+    <p>{{ profile_form.naics_codes.label_tag }} {{ profile_form.naics_codes }}</p>
+    <p>{{ profile_form.certifications.label_tag }} {{ profile_form.certifications }}</p>
+    <p>{{ profile_form.past_performance.label_tag }} {{ profile_form.past_performance }}</p>
+    <p>{{ profile_form.contact_name.label_tag }} {{ profile_form.contact_name }}</p>
+    <p>{{ profile_form.contact_email.label_tag }} {{ profile_form.contact_email }}</p>
+    <p>{{ profile_form.contact_phone.label_tag }} {{ profile_form.contact_phone }}</p>
+    <p>{{ profile_form.website.label_tag }} {{ profile_form.website }}</p>
+
+    <button type="submit" name="action" value="extract_ocr">Extract + Prefill from PDF</button>
+    <button type="submit" name="action" value="submit_profile">{% if editing %}Update Profile{% else %}Save Profile{% endif %}</button>
+</form>
+
+{% if ocr_error %}
+<p style="color: red;">{{ ocr_error }}</p>
+{% endif %}
+
+<p><strong>Last processed file:</strong> {% if processed_file_name %}{{ processed_file_name }}{% else %}None{% endif %}</p>
+
+{% if success_message %}
+  <p style="color: green;">{{ success_message }}</p>
+{% endif %}
+
+{% if editing %}
+  <p><strong>Editing existing capability profile</strong></p>
+{% endif %}
+
+{% if extracted_text %}
+<h3>Extracted Text</h3>
+<pre>{{ extracted_text }}</pre>
+{% endif %}
+
+<h3>Structured Data (Dictionary View)</h3>
+<pre>{{ structured_data_json }}</pre>
+
+{% if submitted_data %}
+<h3>Submitted Values (Confirmation)</h3>
+<pre>{% for key, value in submitted_data.items %}{{ key }}: {{ value }}
+{% endfor %}</pre>
+{% endif %}
+
+<hr>
+<h2>Linked Emails</h2>
+<p>Add extra emails so opportunities can be compiled in one place.</p>
+
+<form id="linked-email-form">
+  <label for="linked-email-input">Additional Email</label>
+  <input id="linked-email-input" type="email" placeholder="name@example.com" required>
+  <button type="submit">Add Email</button>
+</form>
+
+<p id="linked-email-message"></p>
+<ul id="linked-email-list"></ul>
+
+<script>
+  (function () {
+    const token = localStorage.getItem('token');
+    const listEl = document.getElementById('linked-email-list');
+    const msgEl = document.getElementById('linked-email-message');
+    const formEl = document.getElementById('linked-email-form');
+    const inputEl = document.getElementById('linked-email-input');
+
+    const setMessage = (text, isError = false) => {
+      msgEl.textContent = text;
+      msgEl.style.color = isError ? 'red' : 'green';
+    };
+
+    const authHeaders = () => ({
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${token}`,
+    });
+
+    const renderEmails = (emails) => {
+      listEl.innerHTML = '';
+      if (!emails.length) {
+        const li = document.createElement('li');
+        li.textContent = 'No linked emails yet.';
+        listEl.appendChild(li);
+        return;
+      }
+
+      emails.forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = item.email + ' ';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', async () => {
+          try {
+            const response = await fetch(`/accounts/linked-emails/${item.id}/`, {
+              method: 'DELETE',
+              headers: authHeaders(),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              setMessage(data.error || 'Failed to remove linked email.', true);
+              return;
+            }
+            setMessage(data.message || 'Email removed successfully.');
+            loadEmails();
+          } catch (err) {
+            setMessage('Could not connect to server.', true);
+          }
+        });
+
+        li.appendChild(removeBtn);
+        listEl.appendChild(li);
+      });
+    };
+
+    const loadEmails = async () => {
+      if (!token) {
+        setMessage('Please log in first to manage linked emails.', true);
+        return;
+      }
+      try {
+        const response = await fetch('/accounts/linked-emails/', {
+          headers: authHeaders(),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || 'Failed to load linked emails.', true);
+          return;
+        }
+        renderEmails(data.emails || []);
+      } catch (err) {
+        setMessage('Could not connect to server.', true);
+      }
+    };
+
+    formEl.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!token) {
+        setMessage('Please log in first to manage linked emails.', true);
+        return;
+      }
+
+      const email = inputEl.value.trim();
+      if (!email) {
+        setMessage('Invalid email format.', true);
+        return;
+      }
+
+      try {
+        const response = await fetch('/accounts/linked-emails/', {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ email }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          setMessage(data.error || 'Failed to add linked email.', true);
+          return;
+        }
+        inputEl.value = '';
+        setMessage(data.message || 'Email added successfully.');
+        loadEmails();
+      } catch (err) {
+        setMessage('Could not connect to server.', true);
+      }
+    });
+
+    loadEmails();
+  })();
+</script>
 {% endblock %}

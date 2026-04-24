@@ -2,24 +2,9 @@ import './DashboardPage.css';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-<<<<<<< Updated upstream
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-const statusOptions = ['Not Started', 'Reviewing', 'Drafting', 'Submitted'];
-const sourceLabelMap = {
-  gmail: 'Email',
-  outlook: 'Email',
-  procurement: 'Procurement',
-};
-const sourceClassMap = {
-  gmail: 'source-label email-source',
-  outlook: 'source-label email-source',
-  procurement: 'source-label procurement-source',
-};
-=======
 const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
 const PROGRESS_SUMMARY_API_URL = 'http://127.0.0.1:8000/api/contract-progress/summary/';
 const STATUS_OPTIONS = ['Not Started', 'Reviewing', 'Drafting', 'Submitted'];
-const SAM_SYNC_URL = 'http://127.0.0.1:8000/api/sam/sync/';
 
 const formatLastSynced = () =>
   new Date().toLocaleString('en-US', {
@@ -29,6 +14,8 @@ const formatLastSynced = () =>
     hour: 'numeric',
     minute: '2-digit',
   });
+
+  const SAM_SYNC_URL = 'http://127.0.0.1:8000/api/sam/sync/';
 
 async function syncSamOpportunities(limit = 10) {
   const response = await fetch(SAM_SYNC_URL, {
@@ -90,49 +77,25 @@ async function fetchProgressSummary(signal, token) {
 
   return data;
 }
->>>>>>> Stashed changes
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const [contracts, setContracts] = useState([]);
-  const [selectedPartner, setSelectedPartner] = useState('All Partners');
+  const [hoveredId, setHoveredId] = useState(null);
+  const [allOpportunities, setAllOpportunities] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedNaics, setSelectedNaics] = useState('');
+  const [selectedAgency, setSelectedAgency] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
   const [lastSynced, setLastSynced] = useState('Not synced yet');
-<<<<<<< Updated upstream
-  const [activeNoteId, setActiveNoteId] = useState(null);
-  const [draftNotes, setDraftNotes] = useState({});
-  const [isLoadingContracts, setIsLoadingContracts] = useState(true);
-  const [contractsError, setContractsError] = useState('');
-
-  const token = localStorage.getItem('token');
-
-  const partnerOptions = useMemo(() => {
-    const partners = Array.from(
-      new Set(
-        contracts
-          .map((contract) => contract.partner_name || contract.partner || '')
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b));
-
-    return ['All Partners', ...partners];
-  }, [contracts]);
-
-  const filteredContracts = useMemo(() => {
-    if (selectedPartner === 'All Partners') {
-      return contracts;
-=======
   const [progressSummary, setProgressSummary] = useState({
     won: 0,
     lost: 0,
     pending: 0,
     tracked: 0,
   });
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState(null);
-  const [draftNotes, setDraftNotes] = useState({});
-  const [savedNotes, setSavedNotes] = useState({});
-  const [editedStatuses, setEditedStatuses] = useState({});
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -174,55 +137,46 @@ function DashboardPage() {
     return () => controller.abort();
   }, [token]);
 
-  const opportunitiesWithUiState = useMemo(() => {
-    return allOpportunities.map((opportunity) => ({
-      ...opportunity,
-      uiStatus: editedStatuses[opportunity.id] || opportunity.status || 'Not Started',
-      uiNotes: savedNotes[opportunity.id] || '',
-    }));
-  }, [allOpportunities, editedStatuses, savedNotes]);
-
   const agencyOptions = useMemo(() => {
     return Array.from(
       new Set(
-        opportunitiesWithUiState
+        allOpportunities
           .map((opportunity) => opportunity.agency)
           .filter(Boolean)
       )
     ).sort((left, right) => left.localeCompare(right));
-  }, [opportunitiesWithUiState]);
+  }, [allOpportunities]);
 
   const naicsOptions = useMemo(() => {
     return Array.from(
       new Set(
-        opportunitiesWithUiState
+        allOpportunities
           .map((opportunity) => opportunity.naics_code)
           .filter(Boolean)
       )
     ).sort();
-  }, [opportunitiesWithUiState]);
+  }, [allOpportunities]);
 
   const filteredOpportunities = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const normalizedAgency = selectedAgency.trim().toLowerCase();
     const normalizedStatus = selectedStatus.trim().toLowerCase();
 
-    return opportunitiesWithUiState.filter((opportunity) => {
+    return allOpportunities.filter((opportunity) => {
       const searchableText = [
         opportunity.title,
         opportunity.agency,
         opportunity.description,
         opportunity.partner,
-        opportunity.uiStatus,
+        opportunity.status,
         opportunity.naics_code,
-        opportunity.uiNotes,
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
 
       const opportunityAgency = String(opportunity.agency || '').trim().toLowerCase();
-      const opportunityStatus = String(opportunity.uiStatus || '').trim().toLowerCase();
+      const opportunityStatus = String(opportunity.status || '').trim().toLowerCase();
       const opportunityNaics = String(opportunity.naics_code || '').trim();
 
       const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
@@ -232,10 +186,10 @@ function DashboardPage() {
 
       return matchesSearch && matchesAgency && matchesStatus && matchesNaics;
     });
-  }, [opportunitiesWithUiState, searchTerm, selectedAgency, selectedStatus, selectedNaics]);
+  }, [allOpportunities, searchTerm, selectedAgency, selectedStatus, selectedNaics]);
 
   const quickBrowseItems = useMemo(() => {
-    const countsByNaics = opportunitiesWithUiState.reduce((counts, opportunity) => {
+    const countsByNaics = allOpportunities.reduce((counts, opportunity) => {
       const code = opportunity.naics_code;
       if (!code) {
         return counts;
@@ -255,211 +209,44 @@ function DashboardPage() {
       })
       .slice(0, 4)
       .map(([code, count]) => ({ code, count }));
-  }, [opportunitiesWithUiState]);
+  }, [allOpportunities]);
 
   const recentOpportunities = useMemo(() => filteredOpportunities.slice(0, 3), [filteredOpportunities]);
-
-  const selectedOpportunity = useMemo(
-    () => opportunitiesWithUiState.find((opportunity) => opportunity.id === selectedOpportunityId) || null,
-    [opportunitiesWithUiState, selectedOpportunityId]
-  );
-
-  const getStatusClassName = (status) => {
-    if (status === 'Submitted') return 'status-tag status-tag-submitted';
-    if (status === 'Drafting') return 'status-tag status-tag-drafting';
-    if (status === 'Reviewing') return 'status-tag status-tag-reviewing';
-    return 'status-tag status-tag-neutral';
-  };
 
   const handleSyncContracts = async () => {
     if (isSyncing) {
       return;
->>>>>>> Stashed changes
     }
 
-    return contracts.filter(
-      (contract) => (contract.partner_name || contract.partner || '') === selectedPartner
-    );
-  }, [contracts, selectedPartner]);
-
-  const categories = useMemo(() => {
-    const counts = filteredContracts.reduce((accumulator, contract) => {
-      const key = contract.category || 'Uncategorized';
-      accumulator[key] = (accumulator[key] || 0) + 1;
-      return accumulator;
-    }, {});
-
-    return Object.entries(counts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 4);
-  }, [filteredContracts]);
-
-  const recentHistory = useMemo(() => {
-    return [...filteredContracts]
-      .sort((a, b) => {
-        const aTime = a.deadline ? new Date(a.deadline).getTime() : Number.MAX_SAFE_INTEGER;
-        const bTime = b.deadline ? new Date(b.deadline).getTime() : Number.MAX_SAFE_INTEGER;
-        return aTime - bTime;
-      })
-      .slice(0, 5);
-  }, [filteredContracts]);
-
-  const parseJsonResponse = async (response) => {
-    const text = await response.text();
-    return text ? JSON.parse(text) : {};
-  };
-
-  const formatDeadline = (deadline) => {
-    if (!deadline) {
-      return 'No deadline listed';
-    }
-
-    const date = new Date(deadline);
-
-    if (Number.isNaN(date.getTime())) {
-      return 'No deadline listed';
-    }
-
-    return date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  const fetchContracts = async ({ showLoader = true, showSuccess = false } = {}) => {
-    if (showLoader) {
-      setIsLoadingContracts(true);
-    }
-
-    setContractsError('');
+    setIsSyncing(true);
+    setError('');
 
     try {
-<<<<<<< Updated upstream
-      const response = await fetch(`${API_BASE_URL}/api/contracts/`, {
-        headers: token ? { Authorization: `Token ${token}` } : {},
-      });
-      const data = await parseJsonResponse(response);
+    const result = await syncSamOpportunities(10);
 
-      if (!response.ok) {
-        setContractsError(data.error || 'Failed to load contracts.');
-        return;
-      }
+    // after sync finishes, reload opportunities from DB
+    const [catalogData, summaryData] = await Promise.all([
+      fetchOpportunities(undefined, token),
+      fetchProgressSummary(undefined, token),
+    ]);
 
-      const nextContracts = Array.isArray(data.contracts) ? data.contracts : [];
-      setContracts(
-        nextContracts.map((contract) => ({
-          ...contract,
-          localStatus: contract.status || 'Not Started',
-          localNotes: contract.localNotes || '',
-        }))
-      );
-      setLastSynced(new Date().toLocaleString());
+    setAllOpportunities(catalogData);
+    setProgressSummary(summaryData);
+    setLastSynced(formatLastSynced());
 
-      if (showSuccess) {
-        setSyncMessage('Contracts synced successfully.');
-      }
-    } catch (error) {
-      setContractsError('Could not connect to the contracts service.');
-    } finally {
-      if (showLoader) {
-        setIsLoadingContracts(false);
-      }
-    }
-  };
+    console.log('Sync result:', result);
+  } catch (fetchError) {
+    const isNetworkError = fetchError instanceof TypeError;
 
-  useEffect(() => {
-    fetchContracts();
-  }, []);
-
-  useEffect(() => {
-    if (!partnerOptions.includes(selectedPartner)) {
-      setSelectedPartner('All Partners');
-    }
-  }, [partnerOptions, selectedPartner]);
-
-  const handleSyncContracts = async () => {
-    setIsSyncing(true);
-    setSyncMessage('');
-    await fetchContracts({ showLoader: false, showSuccess: true });
+    setError(
+      isNetworkError
+        ? 'Could not connect to the server.'
+        : fetchError.message || 'Sync failed.'
+    );
+  } finally {
     setIsSyncing(false);
-  };
-
-  const handleStatusChange = (contractId, nextStatus) => {
-    setContracts((currentContracts) =>
-      currentContracts.map((contract) =>
-        contract.id === contractId ? { ...contract, localStatus: nextStatus } : contract
-      )
-    );
-  };
-
-  const handleOpenNotes = (contract) => {
-    setActiveNoteId(contract.id);
-    setDraftNotes((currentDrafts) => ({
-      ...currentDrafts,
-      [contract.id]: currentDrafts[contract.id] ?? contract.localNotes ?? '',
-    }));
-  };
-
-  const handleSaveNote = (contractId) => {
-    setContracts((currentContracts) =>
-      currentContracts.map((contract) =>
-        contract.id === contractId
-          ? { ...contract, localNotes: draftNotes[contractId] || '' }
-          : contract
-      )
-    );
-    setActiveNoteId(null);
-  };
-
-  const getStatusClassName = (status) => {
-    if (status === 'Submitted') {
-      return 'status-tag status-tag-submitted';
-    }
-
-    if (status === 'Drafting') {
-      return 'status-tag status-tag-drafting';
-    }
-
-    if (status === 'Reviewing') {
-      return 'status-tag status-tag-reviewing';
-    }
-
-    return 'status-tag status-tag-neutral';
-  };
-
-  const getSourceClassName = (source) => {
-    return sourceClassMap[source] || 'source-label email-source';
-  };
-
-  const getSourceText = (source) => {
-    return sourceLabelMap[source] || source || 'Email';
-  };
-=======
-      await syncSamOpportunities(10);
-
-      const [catalogData, summaryData] = await Promise.all([
-        fetchOpportunities(undefined, token),
-        fetchProgressSummary(undefined, token),
-      ]);
-
-      setAllOpportunities(catalogData);
-      setProgressSummary(summaryData);
-      setLastSynced(formatLastSynced());
-    } catch (fetchError) {
-      const isNetworkError = fetchError instanceof TypeError;
-
-      setError(
-        isNetworkError
-          ? 'Could not connect to the server.'
-          : fetchError.message || 'Sync failed.'
-      );
-    } finally {
-      setIsSyncing(false);
-    }
-  };
->>>>>>> Stashed changes
+  }
+};
 
   return (
     <div className="dashboard-layout">
@@ -485,7 +272,13 @@ function DashboardPage() {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <input type="text" placeholder="Search contracts..." className="search-bar" />
+            <input
+              type="text"
+              placeholder="Search opportunities..."
+              className="search-bar"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
             <div className="topbar-icons">
               <span
                 className="profile-icon-circle"
@@ -512,11 +305,30 @@ function DashboardPage() {
           <div className="dashboard-inner">
             <h1 className="page-title">Dashboard</h1>
 
+            <section className="section progress-summary-section">
+              <div className="progress-summary-card">
+                <span className="progress-summary-label">Tracked</span>
+                <strong>{progressSummary.tracked}</strong>
+              </div>
+              <div className="progress-summary-card">
+                <span className="progress-summary-label">Pending</span>
+                <strong>{progressSummary.pending}</strong>
+              </div>
+              <div className="progress-summary-card">
+                <span className="progress-summary-label">Won</span>
+                <strong>{progressSummary.won}</strong>
+              </div>
+              <div className="progress-summary-card">
+                <span className="progress-summary-label">Lost</span>
+                <strong>{progressSummary.lost}</strong>
+              </div>
+            </section>
+
             <section className="section sync-section">
               <div className="sync-header-row">
                 <div>
                   <h2 className="section-title">Contract Sync</h2>
-                  <p className="section-helper-text">Sync the latest opportunities from connected sources.</p>
+                  <p className="section-helper-text">Load the latest backend opportunities and refresh the dashboard.</p>
                 </div>
                 <button
                   className="sync-button"
@@ -529,7 +341,7 @@ function DashboardPage() {
 
               <div className="sync-feedback-row">
                 <p className="sync-meta-text">Last synced: {lastSynced}</p>
-                {syncMessage && <p className="sync-success-text">{syncMessage}</p>}
+                {!error && !loading && <p className="sync-success-text">Showing live backend opportunities.</p>}
               </div>
             </section>
 
@@ -537,216 +349,152 @@ function DashboardPage() {
               <div className="section-heading-row">
                 <div>
                   <h2 className="section-title">For You</h2>
-                  <p className="section-helper-text">Filter by partner and review source, notes, and contract status.</p>
+                  <p className="section-helper-text">Filter live opportunities by agency, status, NAICS code, and search terms.</p>
                 </div>
                 <div className="filter-group">
-                  <label htmlFor="partnerFilter" className="filter-label">
-                    Partner
+                  <label htmlFor="agencyFilter" className="filter-label">
+                    Agency
                   </label>
                   <select
-                    id="partnerFilter"
+                    id="agencyFilter"
                     className="partner-filter"
-                    value={selectedPartner}
-                    onChange={(event) => setSelectedPartner(event.target.value)}
+                    value={selectedAgency}
+                    onChange={(event) => setSelectedAgency(event.target.value)}
                   >
-                    {partnerOptions.map((partner) => (
-                      <option key={partner} value={partner}>
-                        {partner}
+                    <option value="">All Agencies</option>
+                    {agencyOptions.map((agency) => (
+                      <option key={agency} value={agency}>
+                        {agency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <label htmlFor="naicsFilter" className="filter-label">
+                    NAICS Code
+                  </label>
+                  <select
+                    id="naicsFilter"
+                    className="partner-filter"
+                    value={selectedNaics}
+                    onChange={(event) => setSelectedNaics(event.target.value)}
+                  >
+                    <option value="">All NAICS</option>
+                    {naicsOptions.map((naicsCode) => (
+                      <option key={naicsCode} value={naicsCode}>
+                        {naicsCode}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <label htmlFor="statusFilter" className="filter-label">
+                    Status
+                  </label>
+                  <select
+                    id="statusFilter"
+                    className="partner-filter"
+                    value={selectedStatus}
+                    onChange={(event) => setSelectedStatus(event.target.value)}
+                  >
+                    <option value="">All Statuses</option>
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {contractsError && <p className="dashboard-error-text">{contractsError}</p>}
-              {isLoadingContracts ? (
-                <div className="empty-state-card">Loading contracts...</div>
-              ) : filteredContracts.length === 0 ? (
-                <div className="empty-state-card">No contracts available for this partner yet.</div>
+              {loading ? (
+                <div className="state-card">Loading opportunities...</div>
+              ) : error ? (
+                <div className="state-card state-card-error">{error}</div>
+              ) : filteredOpportunities.length === 0 ? (
+                <div className="state-card">No opportunities match the selected filters.</div>
               ) : (
                 <div className="contract-list">
-                  {filteredContracts.map((contract) => (
-                    <div key={contract.id} className="contract-card">
+                  {filteredOpportunities.map((opportunity) => (
+                    <div key={opportunity.id} className="contract-card">
                       <div className="card-heading-row">
                         <div>
-                          <h3>{contract.title}</h3>
+                          <div className="title-row">
+                            <h3>{opportunity.title}</h3>
+                            <span
+                              className="summary-button"
+                              onMouseEnter={() => setHoveredId(opportunity.id)}
+                              onMouseLeave={() => setHoveredId(null)}
+                            >
+                              View Summary
+                            </span>
+                          </div>
+                          {hoveredId === opportunity.id && (
+                            <div className="summary-popup">
+                              {opportunity.description || 'No summary available.'}
+                            </div>
+                          )}
                           <div className="card-meta-row">
-<<<<<<< Updated upstream
-                            <span className={getSourceClassName(contract.source)}>{getSourceText(contract.source)}</span>
-                            {!!(contract.partner_name || contract.partner) && (
-                              <span className="partner-pill">Partner: {contract.partner_name || contract.partner}</span>
-=======
-                            {opportunity.naics_code && (
-                              <span className="contract-tag">NAICS {opportunity.naics_code}</span>
-                            )}
+                            <span className="contract-tag">NAICS {opportunity.naics_code}</span>
                             {opportunity.agency && (
                               <span className="partner-pill">{opportunity.agency}</span>
                             )}
-                            <span className={getStatusClassName(opportunity.uiStatus)}>{opportunity.uiStatus}</span>
+                            {opportunity.status && (
+                              <span className="status-tag status-tag-neutral">{opportunity.status}</span>
+                            )}
                             {opportunity.contract_progress && opportunity.contract_progress !== 'NONE' && (
                               <span className="status-tag status-tag-neutral">
                                 {opportunity.contract_progress}
                               </span>
->>>>>>> Stashed changes
                             )}
-                            <span className="contract-tag">{contract.category || 'Uncategorized'}</span>
                           </div>
                         </div>
-<<<<<<< Updated upstream
-                        <div className="contract-status-block">
-                          <label htmlFor={`status-${contract.id}`} className="status-label">
-                            Status
-                          </label>
-                          <select
-                            id={`status-${contract.id}`}
-                            className="status-select"
-                            value={contract.localStatus || 'Not Started'}
-                            onChange={(event) => handleStatusChange(contract.id, event.target.value)}
-                          >
-                            {statusOptions.map((status) => (
-                              <option key={status} value={status}>
-                                {status}
-                              </option>
-                            ))}
-                          </select>
-                          <span className={getStatusClassName(contract.localStatus || 'Not Started')}>
-                            {contract.localStatus || 'Not Started'}
-                          </span>
-                        </div>
-=======
                         <button
                           className="note-action-button"
                           type="button"
-                          onClick={() => setSelectedOpportunityId(opportunity.id)}
+                          onClick={() => navigate(`/contracts/${opportunity.id}`)}
                         >
                           View Details
                         </button>
->>>>>>> Stashed changes
                       </div>
 
                       <p>
-                        <strong>Agency:</strong> {contract.agency || 'Unknown agency'}
-                      </p>
-                      {contract.summary && (
-                        <p>
-                          <strong>Summary:</strong> {contract.summary}
-                        </p>
-                      )}
-                      <p>
-                        <strong>NAICS Code:</strong> {contract.naics_code || 'Not listed'}
+                        <strong>Agency:</strong> {opportunity.agency || 'Not provided'}
                       </p>
                       <p>
-<<<<<<< Updated upstream
-                        <strong>Due Date:</strong> {formatDeadline(contract.deadline)}
-=======
-                        <strong>NAICS Code:</strong> {opportunity.naics_code || 'Not provided'}
+                        <strong>NAICS Code:</strong> {opportunity.naics_code}
                       </p>
                       <p>
-                        <strong>Status:</strong> {opportunity.uiStatus || 'Not Started'}
->>>>>>> Stashed changes
+                        <strong>Status:</strong> {opportunity.status || 'Not Started'}
                       </p>
-
-                      <div className="notes-section">
-                        <div className="notes-header-row">
-                          <h4 className="notes-title">Notes</h4>
-                          <button
-                            className="note-action-button"
-                            onClick={() => handleOpenNotes(contract)}
-                          >
-                            {contract.localNotes ? 'Edit Note' : 'Add Note'}
-                          </button>
-                        </div>
-
-                        {activeNoteId === contract.id ? (
-                          <div className="notes-editor">
-                            <textarea
-                              className="notes-textarea"
-                              rows="4"
-                              value={draftNotes[contract.id] || ''}
-                              onChange={(event) =>
-                                setDraftNotes((currentDrafts) => ({
-                                  ...currentDrafts,
-                                  [contract.id]: event.target.value,
-                                }))
-                              }
-                              placeholder="Add notes about this contract..."
-                            />
-                            <div className="notes-editor-actions">
-                              <button
-                                className="notes-save-button"
-                                onClick={() => handleSaveNote(contract.id)}
-                              >
-                                Save Note
-                              </button>
-                              <button
-                                className="notes-cancel-button"
-                                onClick={() => setActiveNoteId(null)}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="notes-display-box">
-                            {contract.localNotes || 'No notes added yet.'}
-                          </div>
-                        )}
-                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </section>
 
-<<<<<<< Updated upstream
-            <section className="section">
-              <h2 className="section-title">Quick Browse</h2>
-              {categories.length === 0 ? (
-                <div className="empty-state-card">Categories will appear once contracts are available.</div>
-              ) : (
-                <div className="browse-grid">
-                  {categories.map((category) => (
-                    <div key={category.name} className="browse-card">
-                      <h3>{category.name}</h3>
-                      <p>{category.count} opportunities</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+          
 
-=======
->>>>>>> Stashed changes
             <section className="section">
-              <h2 className="section-title">Recent Contract History</h2>
-              {recentHistory.length === 0 ? (
-                <div className="empty-state-card">Recent contract history will appear after contracts load.</div>
+              <h2 className="section-title">Recent Opportunities</h2>
+              {recentOpportunities.length === 0 ? (
+                <div className="state-card">No opportunities available for the current filters.</div>
               ) : (
                 <div className="history-table-wrapper">
                   <table className="history-table">
                     <thead>
                       <tr>
+                        <th>Title</th>
                         <th>Agency</th>
                         <th>NAICS</th>
-                        <th>Category</th>
-                        <th>Due Date</th>
                       </tr>
                     </thead>
                     <tbody>
-<<<<<<< Updated upstream
-                      {recentHistory.map((item) => (
-                        <tr key={item.id}>
-                          <td>{item.agency || 'Unknown agency'}</td>
-                          <td>{item.naics_code || 'Not listed'}</td>
-                          <td>{item.category || 'Uncategorized'}</td>
-                          <td>{formatDeadline(item.deadline)}</td>
-=======
                       {recentOpportunities.map((opportunity) => (
                         <tr key={opportunity.id}>
                           <td>{opportunity.title}</td>
                           <td>{opportunity.agency || 'Not provided'}</td>
-                          <td>{opportunity.naics_code || 'Not provided'}</td>
->>>>>>> Stashed changes
+                          <td>{opportunity.naics_code}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -757,99 +505,6 @@ function DashboardPage() {
           </div>
         </main>
       </div>
-
-      {selectedOpportunity && (
-        <div className="contract-modal-overlay" onClick={() => setSelectedOpportunityId(null)}>
-          <div className="contract-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="contract-modal-header">
-              <h2 className="section-title">Opportunity Details</h2>
-              <button className="contract-modal-close" onClick={() => setSelectedOpportunityId(null)}>
-                Close
-              </button>
-            </div>
-
-            <h3 className="expanded-contract-title">{selectedOpportunity.title}</h3>
-            <p><strong>Description:</strong> {selectedOpportunity.description || 'No description provided.'}</p>
-            <p><strong>Agency:</strong> {selectedOpportunity.agency || 'Not provided'}</p>
-            <p><strong>NAICS Code:</strong> {selectedOpportunity.naics_code || 'Not provided'}</p>
-            <p><strong>Current Status:</strong> {selectedOpportunity.uiStatus}</p>
-            {selectedOpportunity.source && <p><strong>Source:</strong> {selectedOpportunity.source}</p>}
-            {selectedOpportunity.partner && <p><strong>Partner:</strong> {selectedOpportunity.partner}</p>}
-            {selectedOpportunity.deadline && <p><strong>Deadline:</strong> {selectedOpportunity.deadline}</p>}
-            {selectedOpportunity.hyperlink && (
-              <p>
-                <strong>Hyperlink:</strong>{' '}
-                <a href={selectedOpportunity.hyperlink} target="_blank" rel="noreferrer">
-                  View Opportunity
-                </a>
-              </p>
-            )}
-
-            <div className="expanded-contract-section">
-              <div className="notes-header-row">
-                <h4 className="notes-title">Label / Status</h4>
-              </div>
-              <select
-                className="status-select expanded-status-select"
-                value={selectedOpportunity.uiStatus}
-                onChange={(event) =>
-                  setEditedStatuses((currentStatuses) => ({
-                    ...currentStatuses,
-                    [selectedOpportunity.id]: event.target.value,
-                  }))
-                }
-              >
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
-              <span className={getStatusClassName(selectedOpportunity.uiStatus)}>{selectedOpportunity.uiStatus}</span>
-            </div>
-
-            <div className="expanded-contract-section">
-              <div className="notes-header-row">
-                <h4 className="notes-title">Notes</h4>
-              </div>
-              <textarea
-                className="notes-textarea"
-                rows="5"
-                value={draftNotes[selectedOpportunity.id] ?? selectedOpportunity.uiNotes ?? ''}
-                onChange={(event) =>
-                  setDraftNotes((currentDrafts) => ({
-                    ...currentDrafts,
-                    [selectedOpportunity.id]: event.target.value,
-                  }))
-                }
-                placeholder="Add notes about this opportunity..."
-              />
-              <div className="notes-editor-actions">
-                <button
-                  className="notes-save-button"
-                  onClick={() =>
-                    setSavedNotes((currentNotes) => ({
-                      ...currentNotes,
-                      [selectedOpportunity.id]: draftNotes[selectedOpportunity.id] ?? '',
-                    }))
-                  }
-                >
-                  Save Note
-                </button>
-                <button
-                  className="notes-cancel-button"
-                  onClick={() =>
-                    setDraftNotes((currentDrafts) => ({
-                      ...currentDrafts,
-                      [selectedOpportunity.id]: savedNotes[selectedOpportunity.id] ?? '',
-                    }))
-                  }
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -125,6 +125,31 @@
     margin-bottom: 36px;
 }
 
+.progress-summary-section {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.progress-summary-card {
+    background-color: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 18px 20px;
+}
+
+.progress-summary-card strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 1.8rem;
+}
+
+.progress-summary-label {
+    color: #4b5563;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
 .section-title {
     font-size: 1.7rem;
     margin-bottom: 18px;
@@ -148,6 +173,10 @@
 .sync-header-row {
     align-items: flex-end;
     margin-bottom: 18px;
+}
+
+.section-heading-row {
+    flex-wrap: wrap;
 }
 
 .sync-section {
@@ -223,6 +252,20 @@
     border-radius: 8px;
     background-color: #ffffff;
     font-size: 0.95rem;
+}
+
+.state-card {
+    background-color: #f5f5f5;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    padding: 22px 24px;
+    color: #374151;
+}
+
+.state-card-error {
+    border-color: #fecaca;
+    background-color: #fef2f2;
+    color: #991b1b;
 }
 
 .contract-list {
@@ -461,6 +504,10 @@
         grid-template-columns: repeat(2, 1fr);
     }
 
+    .progress-summary-section {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
     .sync-feedback-row {
         flex-direction: column;
         align-items: flex-start;
@@ -490,6 +537,10 @@
     }
 
     .browse-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .progress-summary-section {
         grid-template-columns: 1fr;
     }
 }
@@ -523,91 +574,3 @@
     font-size: 14px;
     max-width: 400px;
   }
-
-<<<<<<< Updated upstream
-.dashboard-error-text {
-    color: #dc2626;
-    font-weight: 600;
-    margin-bottom: 18px;
-}
-
-.empty-state-card {
-    background-color: #f5f5f5;
-    border: 1px solid #d9d9d9;
-    border-radius: 8px;
-    padding: 24px 28px;
-    color: #4b5563;
-=======
-.contract-modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(17, 24, 39, 0.45);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    z-index: 1000;
-}
-
-.contract-modal {
-    width: min(760px, 100%);
-    max-height: 90vh;
-    overflow-y: auto;
-    background: #ffffff;
-    border-radius: 14px;
-    padding: 28px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
-}
-
-.contract-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 20px;
-}
-
-.contract-modal-close {
-    background: #e5e7eb;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 14px;
-    cursor: pointer;
-    color: #111827;
-}
-
-.contract-modal-close:hover {
-    background: #d1d5db;
-}
-
-.expanded-contract-title {
-    margin-top: 0;
-    margin-bottom: 18px;
-    font-size: 1.4rem;
-}
-
-.expanded-contract-section {
-    margin-top: 22px;
-    padding-top: 18px;
-    border-top: 1px solid #e5e7eb;
-}
-
-.expanded-status-select {
-    margin-bottom: 12px;
-}
-
-@media (max-width: 720px) {
-    .contract-modal-overlay {
-        padding: 16px;
-    }
-
-    .contract-modal {
-        padding: 20px;
-    }
-
-    .contract-modal-header {
-        flex-direction: column;
-        align-items: stretch;
-    }
->>>>>>> Stashed changes
-}

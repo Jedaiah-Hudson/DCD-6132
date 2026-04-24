@@ -1,299 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ template_data.title|default:"AI Matchmaking Tool" }}</title>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            font-family: Arial, Helvetica, sans-serif;
-            background-color: #fafafa;
-            color: #0f172a;
-        }
-
-        a {
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .app-shell {
-            display: flex;
-            min-height: 100vh;
-        }
-
-        .sidebar {
-            width: 230px;
-            background-color: #ffffff;
-            border-right: 1px solid #e5e7eb;
-            padding: 24px 14px;
-            position: fixed;
-            top: 0;
-            left: 0;
-            bottom: 0;
-        }
-
-        .brand {
-            font-size: 18px;
-            font-weight: 700;
-            line-height: 1.35;
-            margin: 0 8px 24px 8px;
-        }
-
-        .nav-links {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 10px;
-            border-radius: 6px;
-            font-size: 16px;
-            color: #334155;
-        }
-
-        .nav-link:hover {
-            background-color: #f3f4f6;
-        }
-
-        .nav-link.active {
-            background-color: #f3f4f6;
-            font-weight: 600;
-            color: #111827;
-        }
-
-        .nav-icon {
-            width: 18px;
-            height: 18px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .main-area {
-            margin-left: 230px;
-            width: calc(100% - 230px);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .topbar {
-            height: 64px;
-            background-color: #ffffff;
-            border-bottom: 1px solid #e5e7eb;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 28px;
-        }
-
-        .search-wrap {
-            width: 100%;
-            max-width: 430px;
-            position: relative;
-            margin: 0 auto;
-        }
-
-        .search-wrap input {
-            width: 100%;
-            height: 40px;
-            border: 1px solid #d1d5db;
-            border-radius: 4px;
-            padding: 0 14px 0 38px;
-            font-size: 16px;
-            outline: none;
-            background-color: #ffffff;
-        }
-
-        .search-wrap svg {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 17px;
-            height: 17px;
-            color: #9ca3af;
-        }
-
-        .topbar-right {
-            display: flex;
-            align-items: center;
-            gap: 18px;
-            margin-left: 24px;
-        }
-
-        .icon-button {
-            position: relative;
-            width: 24px;
-            height: 24px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: #475569;
-        }
-
-        .badge {
-            position: absolute;
-            top: -6px;
-            right: -8px;
-            min-width: 18px;
-            height: 18px;
-            padding: 0 5px;
-            border-radius: 999px;
-            background-color: #ef4444;
-            color: white;
-            font-size: 11px;
-            font-weight: 700;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .page-content {
-            padding: 34px 34px 48px 34px;
-        }
-
-        .help-button {
-            position: fixed;
-            right: 14px;
-            bottom: 12px;
-            width: 28px;
-            height: 28px;
-            border: 1px solid #d1d5db;
-            border-radius: 50%;
-            background-color: #ffffff;
-            color: #334155;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-        }
-
-        @media (max-width: 900px) {
-            .sidebar {
-                position: static;
-                width: 100%;
-                border-right: none;
-                border-bottom: 1px solid #e5e7eb;
-            }
-
-            .app-shell {
-                flex-direction: column;
-            }
-
-            .main-area {
-                margin-left: 0;
-                width: 100%;
-            }
-
-            .topbar {
-                flex-wrap: wrap;
-                height: auto;
-                gap: 12px;
-                padding: 16px;
-            }
-
-            .search-wrap {
-                max-width: 100%;
-                margin: 0;
-            }
-        }
-    </style>
+    <title>{{ template_data.title }}</title>
 </head>
 <body>
-<div class="app-shell">
-    <aside class="sidebar">
-        <div class="brand">AI Matchmaking<br>Tool</div>
 
-        <nav class="nav-links">
-            <a href="/" class="nav-link active">
-                <span class="nav-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="3" width="7" height="7"></rect>
-                        <rect x="3" y="14" width="7" height="7"></rect>
-                        <rect x="14" y="14" width="7" height="7"></rect>
-                    </svg>
-                </span>
-                <span>Dashboard</span>
-            </a>
+<nav>
+    {% if user.is_authenticated %}
+    <a href="/">Dashboard</a> |
+    <a href="/notifications/">Notifications</a> |
+    <a href="/profile/">Profile</a> |
+    <form method="post" action="/accounts/logout/" style="display:inline;">
+        {% csrf_token %}
+        <button
+            type="submit"
+            style="background:none;border:none;padding:0;margin:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;"
+        >
+            Logout
+        </button>
+    </form>
+    {% else %}
+    <a href="/accounts/login-vis/">Sign In</a> |
+    <a href="/accounts/signup-vis/">Sign Up</a>
+    {% endif %}
+</nav>
 
-            <a href="/" class="nav-link">
-                <span class="nav-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="7"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                </span>
-                <span>AI Matchmaking</span>
-            </a>
+<hr>
 
-            <a href="/profile/" class="nav-link">
-                <span class="nav-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="8" r="4"></circle>
-                        <path d="M4 21c1.8-4 5-6 8-6s6.2 2 8 6"></path>
-                    </svg>
-                </span>
-                <span>Profile</span>
-            </a>
+{% block content %}{% endblock content %}
 
-            <a href="/notifications/" class="nav-link">
-                <span class="nav-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
-                        <path d="M13.73 21a2 2 0 01-3.46 0"></path>
-                    </svg>
-                </span>
-                <span>Notifications</span>
-            </a>
-        </nav>
-    </aside>
-
-    <div class="main-area">
-        <header class="topbar">
-            <div class="search-wrap">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="7"></circle>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <input type="text" placeholder="Search contracts...">
-            </div>
-
-            <div class="topbar-right">
-                <a href="/notifications/" class="icon-button">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
-                        <path d="M13.73 21a2 2 0 01-3.46 0"></path>
-                    </svg>
-                    <span class="badge">3</span>
-                </a>
-
-                <a href="/profile/" class="icon-button">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="8" r="4"></circle>
-                        <path d="M4 21c1.8-4 5-6 8-6s6.2 2 8 6"></path>
-                    </svg>
-                </a>
-            </div>
-        </header>
-
-        <main class="page-content">
-            {% block content %}{% endblock content %}
-        </main>
-    </div>
-</div>
-
-<div class="help-button">?</div>
 </body>
 </html>

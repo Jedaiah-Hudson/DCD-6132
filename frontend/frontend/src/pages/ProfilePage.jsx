@@ -1,21 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
+import NaicsMultiSelect from '../components/NaicsMultiSelect';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-const EMPTY_PROFILE = {
-  company_name: '',
-  capability_summary: '',
-  core_competencies: '',
-  differentiators: '',
-  naics_codes: '',
-  certifications: '',
-  past_performance: '',
-  contact_name: '',
-  contact_email: '',
-  contact_phone: '',
-  website: '',
-};
+const defaultMailboxConnections = [
+  {
+    id: 1,
+    provider: 'Gmail',
+    email: 'contracts@pinkstem.org',
+    status: 'Connected',
+  },
+  {
+    id: 2,
+    provider: 'Outlook',
+    email: 'opportunities@pinkstem.org',
+    status: 'Needs attention',
+  },
+];
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ function ProfilePage() {
   const [capabilitySummary, setCapabilitySummary] = useState('');
   const [coreCompetencies, setCoreCompetencies] = useState('');
   const [differentiators, setDifferentiators] = useState('');
-  const [naicsCodes, setNaicsCodes] = useState('');
+  const [naicsCodes, setNaicsCodes] = useState([]);
   const [certifications, setCertifications] = useState('');
   const [pastPerformance, setPastPerformance] = useState('');
   const [contactName, setContactName] = useState('');
@@ -40,14 +41,7 @@ function ProfilePage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [editing, setEditing] = useState(false);
   const [extractedText, setExtractedText] = useState('');
-
-  const [mailboxConnections, setMailboxConnections] = useState([]);
-  const [mailboxStates, setMailboxStates] = useState({});
-  const [isLoadingMailboxes, setIsLoadingMailboxes] = useState(true);
-  const [showAddEmailForm, setShowAddEmailForm] = useState(false);
-  const [newMailboxEmail, setNewMailboxEmail] = useState('');
-  const [newMailboxLabel, setNewMailboxLabel] = useState('');
-  const [isAddingMailbox, setIsAddingMailbox] = useState(false);
+  const [mailboxConnections, setMailboxConnections] = useState(defaultMailboxConnections);
 
   const token = localStorage.getItem('token');
 
@@ -65,12 +59,12 @@ function ProfilePage() {
     website: website,
   };
 
-  const fillProfileFields = (profile = EMPTY_PROFILE) => {
+  const fillProfileFields = (profile) => {
     setCompanyName(profile.company_name || '');
     setCapabilitySummary(profile.capability_summary || '');
     setCoreCompetencies(profile.core_competencies || '');
     setDifferentiators(profile.differentiators || '');
-    setNaicsCodes(profile.naics_codes || '');
+    setNaicsCodes(profile.naics_codes || []);
     setCertifications(profile.certifications || '');
     setPastPerformance(profile.past_performance || '');
     setContactName(profile.contact_name || '');
@@ -79,107 +73,26 @@ function ProfilePage() {
     setWebsite(profile.website || '');
   };
 
-  const getMailboxProvider = (email) => {
-    const normalizedEmail = (email || '').toLowerCase();
-
-    if (normalizedEmail.includes('gmail.com')) {
-      return 'Gmail';
-    }
-
-    if (
-      normalizedEmail.includes('outlook.com') ||
-      normalizedEmail.includes('hotmail.com') ||
-      normalizedEmail.includes('live.com')
-    ) {
-      return 'Outlook';
-    }
-
-    return 'Email';
-  };
-
-  const displayedMailboxes = useMemo(() => {
-    return mailboxConnections.map((mailbox) => {
-      const mailboxState = mailboxStates[mailbox.id] || {};
-      return {
-        ...mailbox,
-        provider: getMailboxProvider(mailbox.email),
-        connectedProvider: mailboxState.connectedProvider || '',
-        status: mailboxState.status || 'Not connected',
-      };
-    });
-  }, [mailboxConnections, mailboxStates]);
-
-  const parseJsonResponse = async (response) => {
-    const text = await response.text();
-    return text ? JSON.parse(text) : {};
-  };
-
-  const authorizedHeaders = (includeJson = false) => {
-    const headers = {};
-
-    if (token) {
-      headers.Authorization = `Token ${token}`;
-    }
-
-    if (includeJson) {
-      headers['Content-Type'] = 'application/json';
-    }
-
-    return headers;
-  };
-
-  const clearMessages = () => {
-    setUploadError('');
-    setSuccessMessage('');
-  };
-
-  const loadLinkedEmails = async () => {
-    if (!token) {
-      setIsLoadingMailboxes(false);
-      return;
-    }
-
-    setIsLoadingMailboxes(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/accounts/linked-emails/`, {
-        method: 'GET',
-        headers: authorizedHeaders(),
-      });
-
-      const data = await parseJsonResponse(response);
-
-      if (!response.ok) {
-        setUploadError(data.error || 'Failed to load linked emails.');
-        return;
-      }
-
-      setMailboxConnections(Array.isArray(data.emails) ? data.emails : []);
-    } catch (error) {
-      setUploadError('Could not load linked emails.');
-    } finally {
-      setIsLoadingMailboxes(false);
-    }
-  };
-
   useEffect(() => {
     const loadProfile = async () => {
       if (!token) return;
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/profile/`, {
+        const response = await fetch('http://127.0.0.1:8000/api/profile/', {
           method: 'GET',
-          headers: authorizedHeaders(),
+          headers: {
+            Authorization: `Token ${token}`,
+          },
         });
 
-        const data = await parseJsonResponse(response);
+        const data = await response.json();
 
         if (!response.ok) {
           setUploadError(data.message || 'Failed to load profile.');
           return;
         }
 
-        fillProfileFields(data.profile || data || EMPTY_PROFILE);
+        fillProfileFields(data.profile || data || {});
         setEditing(Boolean(data.editing));
         setLastProcessedFile(data.processed_file_name || 'None');
       } catch (error) {
@@ -188,13 +101,13 @@ function ProfilePage() {
     };
 
     loadProfile();
-    loadLinkedEmails();
   }, [token]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     setSelectedFile(file || null);
-    clearMessages();
+    setUploadError('');
+    setSuccessMessage('');
   };
 
   const handleExtractPrefill = async () => {
@@ -207,23 +120,27 @@ function ProfilePage() {
     formData.append('capability_pdf', selectedFile);
 
     setIsUploading(true);
-    clearMessages();
+    setUploadError('');
+    setSuccessMessage('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/extract/`, {
+      const response = await fetch('http://127.0.0.1:8000/api/profile/extract/', {
         method: 'POST',
-        headers: authorizedHeaders(),
+        headers: {
+          Authorization: `Token ${token}`,
+        },
         body: formData,
       });
 
-      const data = await parseJsonResponse(response);
+      const data = await response.json();
 
       if (!response.ok) {
         setUploadError(data.message || 'Failed to process PDF.');
+        setIsUploading(false);
         return;
       }
 
-      fillProfileFields(data.profile || data || EMPTY_PROFILE);
+      fillProfileFields(data.profile || data || {});
       setLastProcessedFile(data.processed_file_name || 'None');
       setExtractedText(data.extracted_text || '');
       setSuccessMessage(data.message || 'Fields extracted successfully.');
@@ -237,19 +154,24 @@ function ProfilePage() {
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
-    clearMessages();
+    setUploadError('');
+    setSuccessMessage('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/profile/save/`, {
+      const response = await fetch('http://127.0.0.1:8000/api/profile/save/', {
         method: 'POST',
-        headers: authorizedHeaders(true),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Token ${token}`,
+        },
         body: JSON.stringify(structuredData),
       });
 
-      const data = await parseJsonResponse(response);
+      const data = await response.json();
 
       if (!response.ok) {
         setUploadError(data.message || 'Failed to save profile.');
+        setIsSaving(false);
         return;
       }
 
@@ -262,57 +184,34 @@ function ProfilePage() {
     }
   };
 
-  const handleAddEmail = async () => {
-    if (!newMailboxEmail.trim()) {
-      setUploadError('Please enter an email address.');
-      return;
-    }
+  const handleConnectMailbox = (provider) => {
+    const defaultEmail = provider === 'Gmail'
+      ? 'new.gmail.connection@example.com'
+      : 'new.outlook.connection@example.com';
 
-    setIsAddingMailbox(true);
-    clearMessages();
+    setMailboxConnections((currentConnections) => {
+      const existingConnection = currentConnections.find((connection) => connection.provider === provider);
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/accounts/linked-emails/`, {
-        method: 'POST',
-        headers: authorizedHeaders(true),
-        body: JSON.stringify({
-          email: newMailboxEmail,
-          label: newMailboxLabel,
-        }),
-      });
-
-      const data = await parseJsonResponse(response);
-
-      if (!response.ok) {
-        setUploadError(data.error || 'Failed to add email.');
-        return;
+      if (existingConnection) {
+        return currentConnections.map((connection) => (
+          connection.provider === provider
+            ? { ...connection, status: 'Connected' }
+            : connection
+        ));
       }
 
-      setMailboxConnections((currentConnections) => [
+      return [
         ...currentConnections,
-        data.email,
-      ]);
-      setNewMailboxEmail('');
-      setNewMailboxLabel('');
-      setShowAddEmailForm(false);
-      setSuccessMessage(data.message || 'Email added successfully.');
-    } catch (error) {
-      setUploadError('Could not connect to the server.');
-    } finally {
-      setIsAddingMailbox(false);
-    }
-  };
+        {
+          id: Date.now(),
+          provider,
+          email: defaultEmail,
+          status: 'Connected',
+        },
+      ];
+    });
 
-  const handleConnectMailbox = (mailboxId, provider) => {
-    setMailboxStates((currentStates) => ({
-      ...currentStates,
-      [mailboxId]: {
-        connectedProvider: provider,
-        status: 'Connected',
-      },
-    }));
-
-    setSuccessMessage(`${provider} connected for this mailbox.`);
+    setSuccessMessage(`${provider} mailbox connected.`);
     setUploadError('');
   };
 
@@ -379,103 +278,39 @@ function ProfilePage() {
             {editing && <p className="profile-editing-message">Editing existing capability profile</p>}
 
             <section className="profile-section-card">
-              <div className="mailbox-header-row">
-                <div>
-                  <h2 className="profile-section-title">Mailbox Connections</h2>
-                  <p className="profile-section-description">
-                    Add multiple email accounts, then choose Gmail or Outlook for each mailbox connection.
-                  </p>
-                </div>
+              <h2 className="profile-section-title">Mailbox Connections</h2>
+              <p className="profile-section-description">
+                Connect Gmail or Outlook mailboxes to pull in opportunity emails and manage mailbox status.
+              </p>
 
+              <div className="profile-button-row">
                 <button
                   className="profile-dark-button"
-                  onClick={() => setShowAddEmailForm((currentValue) => !currentValue)}
+                  onClick={() => handleConnectMailbox('Gmail')}
                 >
-                  {showAddEmailForm ? 'Cancel' : 'Add Email'}
+                  Connect Gmail
+                </button>
+
+                <button
+                  className="profile-light-button"
+                  onClick={() => handleConnectMailbox('Outlook')}
+                >
+                  Connect Outlook
                 </button>
               </div>
 
-              {showAddEmailForm && (
-                <div className="mailbox-add-panel">
-                  <div className="mailbox-add-grid">
-                    <div className="profile-field">
-                      <label className="profile-label">Email address</label>
-                      <input
-                        type="email"
-                        value={newMailboxEmail}
-                        onChange={(e) => setNewMailboxEmail(e.target.value)}
-                        className="profile-input"
-                        placeholder="name@company.com"
-                      />
-                    </div>
-
-                    <div className="profile-field">
-                      <label className="profile-label">Label</label>
-                      <input
-                        type="text"
-                        value={newMailboxLabel}
-                        onChange={(e) => setNewMailboxLabel(e.target.value)}
-                        className="profile-input"
-                        placeholder="Contracts inbox"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mailbox-add-actions">
-                    <button
-                      className="profile-dark-button"
-                      onClick={handleAddEmail}
-                      disabled={isAddingMailbox}
-                    >
-                      {isAddingMailbox ? 'Adding...' : 'Save Email'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
               <div className="mailbox-list">
-                {isLoadingMailboxes ? (
-                  <div className="mailbox-card">
-                    <p className="mailbox-empty-text">Loading mailboxes...</p>
-                  </div>
-                ) : displayedMailboxes.length === 0 ? (
-                  <div className="mailbox-card">
-                    <p className="mailbox-empty-text">No additional emails yet. Add one to connect a mailbox.</p>
-                  </div>
-                ) : (
-                  displayedMailboxes.map((mailbox) => (
-                    <div key={mailbox.id} className="mailbox-card mailbox-card-with-actions">
-                      <div className="mailbox-info-block">
-                        <div className="mailbox-title-row">
-                          <h3 className="mailbox-provider">{mailbox.label || mailbox.provider}</h3>
-                          <span className={`mailbox-status ${mailbox.status === 'Connected' ? 'mailbox-status-connected' : 'mailbox-status-warning'}`}>
-                            {mailbox.status}
-                          </span>
-                        </div>
-                        <p className="mailbox-email">{mailbox.email}</p>
-                        <p className="mailbox-provider-caption">
-                          Detected provider: {mailbox.provider}
-                          {mailbox.connectedProvider ? ` • Connected via ${mailbox.connectedProvider}` : ''}
-                        </p>
-                      </div>
-
-                      <div className="mailbox-action-group">
-                        <button
-                          className="profile-dark-button mailbox-connect-button"
-                          onClick={() => handleConnectMailbox(mailbox.id, 'Gmail')}
-                        >
-                          Connect Gmail
-                        </button>
-                        <button
-                          className="profile-light-button mailbox-connect-button"
-                          onClick={() => handleConnectMailbox(mailbox.id, 'Outlook')}
-                        >
-                          Connect Outlook
-                        </button>
-                      </div>
+                {mailboxConnections.map((mailbox) => (
+                  <div key={mailbox.id} className="mailbox-card">
+                    <div>
+                      <h3 className="mailbox-provider">{mailbox.provider}</h3>
+                      <p className="mailbox-email">{mailbox.email}</p>
                     </div>
-                  ))
-                )}
+                    <span className={`mailbox-status ${mailbox.status === 'Connected' ? 'mailbox-status-connected' : 'mailbox-status-warning'}`}>
+                      {mailbox.status}
+                    </span>
+                  </div>
+                ))}
               </div>
             </section>
 
@@ -549,12 +384,10 @@ function ProfilePage() {
                 </div>
 
                 <div className="profile-field">
-                  <label className="profile-label">NAICS codes</label>
-                  <input
-                    type="text"
+                  {/* <label className="profile-label">NAICS codes</label> */}
+                  <NaicsMultiSelect
                     value={naicsCodes}
-                    onChange={(e) => setNaicsCodes(e.target.value)}
-                    className="profile-input"
+                    onChange={setNaicsCodes}
                   />
                 </div>
 
@@ -633,12 +466,7 @@ function ProfilePage() {
               </section>
             )}
 
-            <section className="profile-section-card">
-              <h2 className="profile-section-title">Structured Data (Dictionary View)</h2>
-              <pre className="profile-structured-data">
-                {JSON.stringify(structuredData, null, 2)}
-              </pre>
-            </section>
+            
           </div>
         </main>
       </div>

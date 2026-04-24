@@ -1,0 +1,15 @@
+from rest_framework import serializers
+
+
+class OpportunitySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    title = serializers.CharField()
+    description = serializers.CharField(allow_blank=True)
+    naics_code = serializers.CharField(allow_blank=True)
+    agency = serializers.CharField(allow_blank=True)
+    status = serializers.CharField(allow_blank=True)
+    partner = serializers.CharField(allow_blank=True, required=False)
+    source = serializers.CharField(allow_blank=True, required=False)
+    deadline = serializers.DateTimeField(allow_null=True, required=False)
+    hyperlink = serializers.CharField(allow_blank=True, required=False)
+    contract_progress = serializers.CharField(allow_blank=True, required=False)

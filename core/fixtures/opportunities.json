@@ -1,0 +1,387 @@
+[
+  {
+    "model": "core.opportunity",
+    "pk": 1001,
+    "fields": {
+      "title": "Custom Application Development for Acquisition Analytics",
+      "description": "Provide agile software engineering support to modernize acquisition analytics tools used for procurement planning, data integration, and reporting across multiple defense programs.",
+      "naics_code": "541511",
+      "agency": "Department of Defense",
+      "created_at": "2026-04-07T14:00:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1002,
+    "fields": {
+      "title": "Grants Management Portal Enhancement Services",
+      "description": "Develop and maintain a secure web-based grants management portal with applicant workflows, document handling, and reporting capabilities for housing assistance programs.",
+      "naics_code": "541511",
+      "agency": "HUD",
+      "created_at": "2026-04-07T14:01:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1003,
+    "fields": {
+      "title": "Mission Scheduling Software Modernization",
+      "description": "Design and implement custom scheduling software enhancements to support mission planning, resource assignment, and operational readiness for aerospace programs.",
+      "naics_code": "541511",
+      "agency": "NASA",
+      "created_at": "2026-04-07T14:02:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1004,
+    "fields": {
+      "title": "Energy Compliance Workflow Application Buildout",
+      "description": "Create custom workflow applications for compliance tracking, digital approvals, and data validation tied to federal energy efficiency initiatives.",
+      "naics_code": "541511",
+      "agency": "Department of Energy",
+      "created_at": "2026-04-07T14:03:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1005,
+    "fields": {
+      "title": "Federal Property Disposal Platform Development",
+      "description": "Build a custom application for managing federal property disposal requests, approvals, and public posting requirements across shared services teams.",
+      "naics_code": "541511",
+      "agency": "GSA",
+      "created_at": "2026-04-07T14:04:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1006,
+    "fields": {
+      "title": "Network Operations Dashboard Systems Design",
+      "description": "Provide systems design and architecture services for a unified dashboard that aggregates network health, security telemetry, and incident status across enterprise environments.",
+      "naics_code": "541512",
+      "agency": "Department of Defense",
+      "created_at": "2026-04-07T14:05:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1007,
+    "fields": {
+      "title": "Cloud Migration Systems Integration Support",
+      "description": "Design and integrate cloud-hosted services, identity components, and logging pipelines for a phased migration of administrative systems.",
+      "naics_code": "541512",
+      "agency": "GSA",
+      "created_at": "2026-04-07T14:06:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1008,
+    "fields": {
+      "title": "Scientific Data Platform Architecture Services",
+      "description": "Deliver systems architecture, interface design, and integration planning for a research data platform supporting mission science datasets.",
+      "naics_code": "541512",
+      "agency": "NASA",
+      "created_at": "2026-04-07T14:07:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1009,
+    "fields": {
+      "title": "Facilities Asset System Integration Project",
+      "description": "Provide information technology systems integration to connect asset inventory, maintenance tracking, and work-order systems for public housing facilities.",
+      "naics_code": "541512",
+      "agency": "HUD",
+      "created_at": "2026-04-07T14:08:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1010,
+    "fields": {
+      "title": "Cybersecurity Monitoring Platform Design",
+      "description": "Engineer and integrate a monitoring platform for centralized event collection, alert correlation, and dashboard reporting for critical infrastructure networks.",
+      "naics_code": "541512",
+      "agency": "Department of Energy",
+      "created_at": "2026-04-07T14:09:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1011,
+    "fields": {
+      "title": "Acquisition Strategy Advisory Support",
+      "description": "Provide management consulting services to improve acquisition strategy development, procurement planning, and vendor performance review processes.",
+      "naics_code": "541611",
+      "agency": "GSA",
+      "created_at": "2026-04-07T14:10:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1012,
+    "fields": {
+      "title": "Program Management Process Improvement Initiative",
+      "description": "Assess and redesign internal program management workflows, governance structures, and performance metrics for capital improvement programs.",
+      "naics_code": "541611",
+      "agency": "HUD",
+      "created_at": "2026-04-07T14:11:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1013,
+    "fields": {
+      "title": "Operations Readiness Consulting for Field Units",
+      "description": "Support operational readiness planning, staffing models, and organizational performance reviews for distributed field support units.",
+      "naics_code": "541611",
+      "agency": "Department of Defense",
+      "created_at": "2026-04-07T14:12:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1014,
+    "fields": {
+      "title": "Enterprise Governance and Risk Advisory Services",
+      "description": "Deliver advisory services focused on enterprise governance, performance assessment, and risk mitigation planning for mission support offices.",
+      "naics_code": "541611",
+      "agency": "Department of Energy",
+      "created_at": "2026-04-07T14:13:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1015,
+    "fields": {
+      "title": "Strategic Planning Support for Space Operations",
+      "description": "Provide management consulting and strategic planning facilitation for multi-year space operations modernization initiatives.",
+      "naics_code": "541611",
+      "agency": "NASA",
+      "created_at": "2026-04-07T14:14:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1016,
+    "fields": {
+      "title": "Human Capital Assessment and Workforce Planning",
+      "description": "Conduct workforce assessments, competency analysis, and human capital planning to support recruitment and retention in mission-critical programs.",
+      "naics_code": "541612",
+      "agency": "Department of Energy",
+      "created_at": "2026-04-07T14:15:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1017,
+    "fields": {
+      "title": "Training Needs Analysis for Acquisition Staff",
+      "description": "Analyze workforce capabilities and recommend training pathways, staffing alignments, and organizational development strategies for acquisition offices.",
+      "naics_code": "541612",
+      "agency": "GSA",
+      "created_at": "2026-04-07T14:16:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1018,
+    "fields": {
+      "title": "Leadership Development Consulting Services",
+      "description": "Provide organizational development consulting, leadership coaching frameworks, and performance management recommendations for senior program offices.",
+      "naics_code": "541612",
+      "agency": "HUD",
+      "created_at": "2026-04-07T14:17:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1019,
+    "fields": {
+      "title": "Mission Support Workforce Optimization Study",
+      "description": "Perform workforce optimization analysis to align staffing capacity, labor categories, and support functions with evolving mission requirements.",
+      "naics_code": "541612",
+      "agency": "NASA",
+      "created_at": "2026-04-07T14:18:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1020,
+    "fields": {
+      "title": "Organizational Change Management Support",
+      "description": "Deliver change management planning, stakeholder engagement materials, and organizational development support for enterprise transformation efforts.",
+      "naics_code": "541612",
+      "agency": "Department of Defense",
+      "created_at": "2026-04-07T14:19:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1021,
+    "fields": {
+      "title": "Federal Research Facility Renovation",
+      "description": "Provide construction services for renovation of office, lab, and support spaces in an occupied federal research facility, including code upgrades and phased execution.",
+      "naics_code": "236220",
+      "agency": "Department of Energy",
+      "created_at": "2026-04-07T14:20:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1022,
+    "fields": {
+      "title": "Operations Center Interior Build-Out",
+      "description": "Construct secure interior spaces, conference rooms, and support areas for an operations center requiring strict phasing and quality control.",
+      "naics_code": "236220",
+      "agency": "Department of Defense",
+      "created_at": "2026-04-07T14:21:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1023,
+    "fields": {
+      "title": "Regional Office Modernization Project",
+      "description": "Renovate an existing federal office building to improve accessibility, energy efficiency, and space utilization for administrative operations.",
+      "naics_code": "236220",
+      "agency": "HUD",
+      "created_at": "2026-04-07T14:22:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1024,
+    "fields": {
+      "title": "Visitor Center Expansion Construction",
+      "description": "Perform commercial and institutional construction services to expand public-facing facilities, meeting spaces, and exhibit support infrastructure.",
+      "naics_code": "236220",
+      "agency": "NASA",
+      "created_at": "2026-04-07T14:23:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1025,
+    "fields": {
+      "title": "Federal Training Facility Rehabilitation",
+      "description": "Execute renovation and rehabilitation services for a federal training campus, including classroom upgrades and mechanical system improvements.",
+      "naics_code": "236220",
+      "agency": "GSA",
+      "created_at": "2026-04-07T14:24:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1026,
+    "fields": {
+      "title": "Cybersecurity Awareness Training Delivery",
+      "description": "Provide instructor-led and virtual cybersecurity awareness training for federal staff, including curriculum updates and completion tracking reports.",
+      "naics_code": "611420",
+      "agency": "Department of Defense",
+      "created_at": "2026-04-07T14:25:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1027,
+    "fields": {
+      "title": "Cloud Administration Skills Training Program",
+      "description": "Deliver technical training courses in cloud administration, automation, and secure configuration management for agency IT personnel.",
+      "naics_code": "611420",
+      "agency": "Department of Energy",
+      "created_at": "2026-04-07T14:26:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1028,
+    "fields": {
+      "title": "Data Analytics Workforce Upskilling Support",
+      "description": "Provide workforce training in data analytics platforms, dashboard tools, and reporting methods for mission support and program analysis teams.",
+      "naics_code": "611420",
+      "agency": "GSA",
+      "created_at": "2026-04-07T14:27:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1029,
+    "fields": {
+      "title": "Project Controls Software Training Services",
+      "description": "Develop and deliver training for project controls software used to manage budgets, schedules, and risk across construction and facilities programs.",
+      "naics_code": "611420",
+      "agency": "HUD",
+      "created_at": "2026-04-07T14:28:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1030,
+    "fields": {
+      "title": "Mission Systems Technical Bootcamp",
+      "description": "Provide intensive technical instruction for staff supporting mission systems operations, with a focus on troubleshooting, documentation, and hands-on labs.",
+      "naics_code": "611420",
+      "agency": "NASA",
+      "created_at": "2026-04-07T14:29:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1031,
+    "fields": {
+      "title": "Long-Haul Freight Support for Emergency Supplies",
+      "description": "Provide general freight transportation for palletized emergency supply shipments between regional staging facilities and distribution points.",
+      "naics_code": "484121",
+      "agency": "Department of Energy",
+      "created_at": "2026-04-07T14:30:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1032,
+    "fields": {
+      "title": "Equipment Transport Services for Training Sites",
+      "description": "Transport equipment and support materials between federal training locations under scheduled and surge delivery requirements.",
+      "naics_code": "484121",
+      "agency": "Department of Defense",
+      "created_at": "2026-04-07T14:31:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1033,
+    "fields": {
+      "title": "Interstate Freight Delivery for Field Offices",
+      "description": "Provide full truckload freight transportation for furniture, records, and operational supplies supporting field office relocations and consolidations.",
+      "naics_code": "484121",
+      "agency": "HUD",
+      "created_at": "2026-04-07T14:32:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1034,
+    "fields": {
+      "title": "Mission Hardware Linehaul Transport",
+      "description": "Deliver long-distance transportation services for crated mission hardware, non-hazardous components, and support equipment between federal sites.",
+      "naics_code": "484121",
+      "agency": "NASA",
+      "created_at": "2026-04-07T14:33:00Z"
+    }
+  },
+  {
+    "model": "core.opportunity",
+    "pk": 1035,
+    "fields": {
+      "title": "Federal Supply Chain Linehaul Services",
+      "description": "Provide scheduled linehaul freight transportation to support warehouse replenishment, interagency transfers, and surge movement requirements.",
+      "naics_code": "484121",
+      "agency": "GSA",
+      "created_at": "2026-04-07T14:34:00Z"
+    }
+  }
+]
