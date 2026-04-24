@@ -224,8 +224,11 @@ function ProfilePage() {
           <button className="profile-sidebar-link" onClick={() => navigate('/dashboard')}>
             Dashboard
           </button>
-          <button className="profile-sidebar-link" onClick={() => navigate('/dashboard')}>
+          <button className="profile-sidebar-link" onClick={() => navigate('/ai-matchmaking')}>
             AI Matchmaking
+          </button>
+          <button className="profile-sidebar-link" onClick={() => navigate('/my-contracts')}>
+            My Contracts
           </button>
           <button className="profile-sidebar-link active" onClick={() => navigate('/profile')}>
             Profile

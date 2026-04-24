@@ -77,8 +77,11 @@ function NotificationsPage() {
           <button className="notifications-sidebar-link" onClick={() => navigate('/dashboard')}>
             Dashboard
           </button>
-          <button className="notifications-sidebar-link" onClick={() => navigate('/dashboard')}>
+          <button className="notifications-sidebar-link" onClick={() => navigate('/ai-matchmaking')}>
             AI Matchmaking
+          </button>
+          <button className="notifications-sidebar-link" onClick={() => navigate('/my-contracts')}>
+            My Contracts
           </button>
           <button className="notifications-sidebar-link" onClick={() => navigate('/profile')}>
             Profile

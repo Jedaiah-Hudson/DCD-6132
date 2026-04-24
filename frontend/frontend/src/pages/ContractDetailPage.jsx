@@ -97,7 +97,7 @@ function ContractDetailPage() {
   const { contractId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const dashboardReturn = location.state?.dashboardReturn;
+  const workspaceReturn = location.state?.workspaceReturn;
   const token = localStorage.getItem('token');
   const [contract, setContract] = useState(null);
   const [contractProgress, setContractProgress] = useState('NONE');
@@ -194,11 +194,15 @@ function ContractDetailPage() {
     }
   };
 
-  const handleBackToDashboard = () => {
-    navigate('/dashboard', {
-      state: dashboardReturn ? { restoreDashboard: dashboardReturn } : undefined,
+  const handleBackToContracts = () => {
+    navigate(workspaceReturn?.pathname || '/dashboard', {
+      state: workspaceReturn ? { restoreWorkspace: workspaceReturn } : undefined,
     });
   };
+
+  const backButtonLabel = workspaceReturn?.pageTitle
+    ? `Back to ${workspaceReturn.pageTitle}`
+    : 'Back to Dashboard';
 
   return (
     <div className="dashboard-layout">
@@ -209,8 +213,11 @@ function ContractDetailPage() {
           <button className="sidebar-link" onClick={() => navigate('/dashboard')}>
             Dashboard
           </button>
-          <button className="sidebar-link" onClick={() => navigate('/dashboard')}>
+          <button className="sidebar-link" onClick={() => navigate('/ai-matchmaking')}>
             AI Matchmaking
+          </button>
+          <button className="sidebar-link" onClick={() => navigate('/my-contracts')}>
+            My Contracts
           </button>
           <button className="sidebar-link" onClick={() => navigate('/profile')}>
             Profile
@@ -224,8 +231,8 @@ function ContractDetailPage() {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <button className="notes-cancel-button" onClick={handleBackToDashboard}>
-              Back to Dashboard
+            <button className="notes-cancel-button" onClick={handleBackToContracts}>
+              {backButtonLabel}
             </button>
             <div className="topbar-icons">
               <span
