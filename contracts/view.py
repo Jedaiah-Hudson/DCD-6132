@@ -1,19 +1,20 @@
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from contracts.management.services.naics_utils import get_category_for_naics
-from contracts.models import Contract, UserContractProgress
+from contracts.models import Contract, ContractNotification, UserContractProgress
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from contracts.management.services.sam_api import SamApiError, ingest_sam_opportunities
-from contracts.serializer import UserContractProgressSerializer
+from contracts.serializer import ContractNotificationSerializer, UserContractProgressSerializer
 
 
 @csrf_exempt
@@ -117,12 +118,117 @@ from rest_framework.response import Response
 
 from .models import Contract
 from accounts.models import CapabilityProfile
-from .management.services.openai_service import generate_rfp_response
-from .management.services.prompt_builder import build_capability_profile_text
+
+
+DEADLINE_NOTIFICATION_THRESHOLDS = [
+    (14, "2 weeks", ContractNotification.SeverityChoices.LOW),
+    (7, "1 week", ContractNotification.SeverityChoices.MEDIUM),
+    (5, "5 days", ContractNotification.SeverityChoices.MEDIUM),
+    (3, "3 days", ContractNotification.SeverityChoices.HIGH),
+    (1, "1 day", ContractNotification.SeverityChoices.HIGH),
+]
+
+
+def _tracked_progress_queryset(user):
+    return (
+        UserContractProgress.objects
+        .filter(user=user)
+        .filter(
+            Q(contract_progress__in=[
+                UserContractProgress.ProgressChoices.PENDING,
+                UserContractProgress.ProgressChoices.WON,
+                UserContractProgress.ProgressChoices.LOST,
+            ])
+            | Q(workflow_status__in=[
+                UserContractProgress.WorkflowChoices.REVIEWING,
+                UserContractProgress.WorkflowChoices.DRAFTING,
+                UserContractProgress.WorkflowChoices.SUBMITTED,
+            ])
+        )
+        .select_related("contract")
+    )
+
+
+def _create_notification(user, contract, notification_type, unique_key, title, message, severity, due_at=None):
+    ContractNotification.objects.get_or_create(
+        user=user,
+        unique_key=unique_key,
+        defaults={
+            "contract": contract,
+            "notification_type": notification_type,
+            "severity": severity,
+            "title": title,
+            "message": message,
+            "due_at": due_at,
+        },
+    )
+
+
+def _sync_contract_notifications_for_user(user):
+    now = timezone.now()
+
+    for progress in _tracked_progress_queryset(user):
+        contract = progress.contract
+        deadline_notifications = ContractNotification.objects.filter(
+            user=user,
+            contract=contract,
+            notification_type=ContractNotification.NotificationType.DEADLINE,
+        )
+
+        if contract.deadline and contract.deadline >= now:
+            days_remaining = (contract.deadline.date() - now.date()).days
+            matching_threshold = next(
+                (
+                    (threshold_days, threshold_label, severity)
+                    for threshold_days, threshold_label, severity in sorted(
+                        DEADLINE_NOTIFICATION_THRESHOLDS,
+                        key=lambda item: item[0],
+                    )
+                    if days_remaining <= threshold_days
+                ),
+                None,
+            )
+
+            active_deadline_key = None
+            if matching_threshold:
+                threshold_days, threshold_label, severity = matching_threshold
+                active_deadline_key = f"deadline:{contract.id}:{threshold_days}"
+                _create_notification(
+                    user=user,
+                    contract=contract,
+                    notification_type=ContractNotification.NotificationType.DEADLINE,
+                    unique_key=active_deadline_key,
+                    title="Deadline approaching",
+                    message=f"{contract.title} is due in {threshold_label}.",
+                    severity=severity,
+                    due_at=contract.deadline,
+                )
+
+            if active_deadline_key:
+                deadline_notifications.exclude(unique_key=active_deadline_key).delete()
+            else:
+                deadline_notifications.delete()
+        else:
+            deadline_notifications.delete()
+
+        if contract.status and contract.status.lower() != "active":
+            _create_notification(
+                user=user,
+                contract=contract,
+                notification_type=ContractNotification.NotificationType.STATUS,
+                unique_key=f"status:{contract.id}:{contract.status.lower()}",
+                title="Contract status changed",
+                message=f"{contract.title} is no longer active. Current status: {contract.status}.",
+                severity=ContractNotification.SeverityChoices.HIGH,
+                due_at=contract.deadline,
+            )
 
 
 @api_view(["POST"])
 def generate_draft(request):
+    from .management.services.openai_service import generate_rfp_response
+    from .management.services.prompt_builder import build_capability_profile_text
+
     user = request.user
     contract_id = request.data.get("contract_id")
 
@@ -169,8 +275,14 @@ def contract_progress_summary(request):
 
     progress_counts = (
         UserContractProgress.objects
-        .filter(user=request.user)
-        .exclude(contract_progress=UserContractProgress.ProgressChoices.NONE)
+        .filter(
+            user=request.user,
+            contract_progress__in=[
+                UserContractProgress.ProgressChoices.WON,
+                UserContractProgress.ProgressChoices.LOST,
+                UserContractProgress.ProgressChoices.PENDING,
+            ],
+        )
         .values("contract_progress")
         .annotate(total=Count("id"))
     )
@@ -178,7 +290,7 @@ def contract_progress_summary(request):
     for item in progress_counts:
         counts[item["contract_progress"]] = item["total"]
 
-    tracked = sum(counts.values())
+    tracked = _tracked_progress_queryset(request.user).count()
     return Response(
         {
             "won": counts[UserContractProgress.ProgressChoices.WON],
@@ -197,6 +309,85 @@ def contract_detail(request, contract_id):
     return Response({"contract": _serialize_contract(contract)}, status=status.HTTP_200_OK)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def contract_notifications_summary(request):
+    _sync_contract_notifications_for_user(request.user)
+
+    unread_count = ContractNotification.objects.filter(
+        user=request.user,
+        is_read=False,
+    ).count()
+
+    return Response(
+        {"unread_count": unread_count},
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def contract_notifications(request):
+    _sync_contract_notifications_for_user(request.user)
+
+    notifications = ContractNotification.objects.filter(user=request.user).select_related("contract")
+    serializer = ContractNotificationSerializer(notifications, many=True)
+
+    unread_count = notifications.filter(is_read=False).count()
+    return Response(
+        {
+            "notifications": serializer.data,
+            "unread_count": unread_count,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def contract_notifications_bulk_update(request):
+    notification_ids = request.data.get("notification_ids") or []
+    mark_as = (request.data.get("mark_as") or "").strip().lower()
+
+    if mark_as not in {"read", "unread", "delete"}:
+        return Response(
+            {"detail": "mark_as must be read, unread, or delete."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not isinstance(notification_ids, list) or not notification_ids:
+        return Response(
+            {"detail": "notification_ids must be a non-empty list."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    notifications = ContractNotification.objects.filter(
+        user=request.user,
+        id__in=notification_ids,
+    )
+
+    if mark_as == "delete":
+        deleted_count, _ = notifications.delete()
+        return Response(
+            {
+                "updated_count": deleted_count,
+                "mark_as": mark_as,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    is_read = mark_as == "read"
+    updated_count = notifications.update(is_read=is_read, updated_at=timezone.now())
+
+    return Response(
+        {
+            "updated_count": updated_count,
+            "mark_as": mark_as,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
 @api_view(["GET", "POST", "PATCH"])
 @permission_classes([IsAuthenticated])
 def contract_progress_detail(request, contract_id):
@@ -210,6 +401,9 @@ def contract_progress_detail(request, contract_id):
         serializer = UserContractProgressSerializer(progress)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    previous_progress = progress.contract_progress
+    previous_workflow = progress.workflow_status
+
     serializer = UserContractProgressSerializer(
         progress,
         data=request.data,
@@ -217,5 +411,35 @@ def contract_progress_detail(request, contract_id):
     )
     serializer.is_valid(raise_exception=True)
     serializer.save()
+
+    progress.refresh_from_db()
+
+    if progress.contract_progress != previous_progress:
+        progress_label = progress.get_contract_progress_display()
+        ContractNotification.objects.create(
+            user=request.user,
+            contract=contract,
+            notification_type=ContractNotification.NotificationType.PROGRESS,
+            severity=ContractNotification.SeverityChoices.INFO,
+            unique_key=f"progress:{contract.id}:{timezone.now().isoformat()}",
+            title="Progress updated",
+            message=f"You moved {contract.title} to {progress_label}.",
+            due_at=contract.deadline,
+        )
+
+    if progress.workflow_status != previous_workflow:
+        workflow_label = progress.get_workflow_status_display()
+        ContractNotification.objects.create(
+            user=request.user,
+            contract=contract,
+            notification_type=ContractNotification.NotificationType.WORKFLOW,
+            severity=ContractNotification.SeverityChoices.INFO,
+            unique_key=f"workflow:{contract.id}:{timezone.now().isoformat()}",
+            title="Workflow updated",
+            message=f"You moved {contract.title} to the {workflow_label} stage.",
+            due_at=contract.deadline,
+        )
+
+    _sync_contract_notifications_for_user(request.user)
 
     return Response(serializer.data, status=status.HTTP_200_OK)

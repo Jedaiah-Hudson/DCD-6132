@@ -1,6 +1,7 @@
 import '../pages/DashboardPage.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
 const PROGRESS_SUMMARY_API_URL = 'http://127.0.0.1:8000/api/contract-progress/summary/';
@@ -279,6 +280,7 @@ function ContractsDisplayPage({ workspaceType }) {
     tracked: 0,
   });
   const token = localStorage.getItem('token');
+  const unreadCount = useNotificationSummary();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -496,7 +498,10 @@ function ContractsDisplayPage({ workspaceType }) {
             Profile
           </button>
           <button className="sidebar-link" onClick={() => navigate('/notifications')}>
-            Notifications
+            <span className="sidebar-link-content">
+              <span>Notifications</span>
+              {unreadCount > 0 && <span className="nav-notification-badge">{unreadCount}</span>}
+            </span>
           </button>
         </nav>
       </aside>
@@ -512,15 +517,6 @@ function ContractsDisplayPage({ workspaceType }) {
               onChange={(event) => setSearchTerm(event.target.value)}
             />
             <div className="topbar-icons">
-              <span
-                className="profile-icon-circle"
-                onClick={() => navigate('/notifications')}
-                style={{ cursor: 'pointer' }}
-                title="Notifications"
-              >
-                3
-              </span>
-
               <span
                 className="profile-icon-placeholder"
                 onClick={() => navigate('/profile')}

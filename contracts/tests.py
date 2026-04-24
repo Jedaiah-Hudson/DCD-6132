@@ -1,8 +1,10 @@
 from io import StringIO
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.core.management import call_command
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
@@ -10,7 +12,7 @@ from rest_framework.test import APITestCase
 from accounts.models import User
 from contracts.management.services.procurement_ingest import normalize_procurement_record
 from contracts.management.services.sam_api import SamApiError, fetch_sam_opportunities
-from contracts.models import Contract, UserContractProgress
+from contracts.models import Contract, ContractNotification, UserContractProgress
 
 
 class ProcurementIngestTests(TestCase):
@@ -203,3 +205,121 @@ class UserContractProgressApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_summary_counts_workflow_only_contracts_as_tracked(self):
+        UserContractProgress.objects.create(
+            user=self.user,
+            contract=self.contract,
+            workflow_status=UserContractProgress.WorkflowChoices.REVIEWING,
+        )
+
+        response = self.client.get("/api/contract-progress/summary/", **self.auth_headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["tracked"], 1)
+
+    def test_progress_update_creates_notifications(self):
+        response = self.client.patch(
+            f"/api/contracts/{self.contract.id}/progress/",
+            {
+                "contract_progress": UserContractProgress.ProgressChoices.PENDING,
+                "workflow_status": UserContractProgress.WorkflowChoices.DRAFTING,
+            },
+            format="json",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            ContractNotification.objects.filter(
+                user=self.user,
+                contract=self.contract,
+                notification_type=ContractNotification.NotificationType.PROGRESS,
+            ).exists()
+        )
+        self.assertTrue(
+            ContractNotification.objects.filter(
+                user=self.user,
+                contract=self.contract,
+                notification_type=ContractNotification.NotificationType.WORKFLOW,
+            ).exists()
+        )
+
+    def test_notifications_endpoint_returns_deadline_alerts_for_tracked_contracts(self):
+        self.contract.deadline = timezone.now() + timedelta(days=5)
+        self.contract.save(update_fields=["deadline"])
+        UserContractProgress.objects.create(
+            user=self.user,
+            contract=self.contract,
+            workflow_status=UserContractProgress.WorkflowChoices.REVIEWING,
+        )
+
+        response = self.client.get("/api/notifications/", **self.auth_headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data["notifications"]), 1)
+        self.assertGreaterEqual(response.data["unread_count"], 1)
+        deadline_notifications = ContractNotification.objects.filter(
+            user=self.user,
+            contract=self.contract,
+            notification_type=ContractNotification.NotificationType.DEADLINE,
+        )
+        self.assertEqual(deadline_notifications.count(), 1)
+        self.assertEqual(
+            deadline_notifications.first().unique_key,
+            f"deadline:{self.contract.id}:5",
+        )
+
+    def test_bulk_update_marks_notifications_read_and_unread(self):
+        notification = ContractNotification.objects.create(
+            user=self.user,
+            contract=self.contract,
+            notification_type=ContractNotification.NotificationType.PROGRESS,
+            severity=ContractNotification.SeverityChoices.INFO,
+            unique_key="manual-progress",
+            title="Progress updated",
+            message="You moved Cloud Support to Pending.",
+        )
+
+        read_response = self.client.post(
+            "/api/notifications/bulk-update/",
+            {"notification_ids": [notification.id], "mark_as": "read"},
+            format="json",
+            **self.auth_headers,
+        )
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_read)
+
+        unread_response = self.client.post(
+            "/api/notifications/bulk-update/",
+            {"notification_ids": [notification.id], "mark_as": "unread"},
+            format="json",
+            **self.auth_headers,
+        )
+        self.assertEqual(unread_response.status_code, status.HTTP_200_OK)
+        notification.refresh_from_db()
+        self.assertFalse(notification.is_read)
+
+    def test_bulk_update_deletes_notifications(self):
+        notification = ContractNotification.objects.create(
+            user=self.user,
+            contract=self.contract,
+            notification_type=ContractNotification.NotificationType.PROGRESS,
+            severity=ContractNotification.SeverityChoices.INFO,
+            unique_key="manual-delete",
+            title="Progress updated",
+            message="You moved Cloud Support to Pending.",
+        )
+
+        response = self.client.post(
+            "/api/notifications/bulk-update/",
+            {"notification_ids": [notification.id], "mark_as": "delete"},
+            format="json",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(
+            ContractNotification.objects.filter(id=notification.id).exists()
+        )
