@@ -6,6 +6,7 @@ class OpportunitySerializer(serializers.Serializer):
     title = serializers.CharField()
     description = serializers.CharField(allow_blank=True)
     naics_code = serializers.CharField(allow_blank=True)
+    naics_category = serializers.CharField(allow_blank=True, required=False)
     agency = serializers.CharField(allow_blank=True)
     status = serializers.CharField(allow_blank=True)
     partner = serializers.CharField(allow_blank=True, required=False)
@@ -13,3 +14,4 @@ class OpportunitySerializer(serializers.Serializer):
     deadline = serializers.DateTimeField(allow_null=True, required=False)
     hyperlink = serializers.CharField(allow_blank=True, required=False)
     contract_progress = serializers.CharField(allow_blank=True, required=False)
+    workflow_status = serializers.CharField(allow_blank=True, required=False)

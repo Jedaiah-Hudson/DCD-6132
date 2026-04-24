@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import './DashboardPage.css';
 import './ContractDetailPage.css';
+import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
 const PROGRESS_OPTIONS = [
@@ -10,6 +11,74 @@ const PROGRESS_OPTIONS = [
   { value: 'WON', label: 'Won' },
   { value: 'LOST', label: 'Lost' },
 ];
+const WORKFLOW_OPTIONS = [
+  { value: 'NOT_STARTED', label: 'Not Started' },
+  { value: 'REVIEWING', label: 'Reviewing' },
+  { value: 'DRAFTING', label: 'Drafting' },
+  { value: 'SUBMITTED', label: 'Submitted' },
+];
+const PROGRESS_STATUS_COLORS = {
+  NONE: 'gray',
+  PENDING: 'amber',
+  WON: 'green',
+  LOST: 'red',
+};
+const WORKFLOW_STATUS_COLORS = {
+  NOT_STARTED: 'gray',
+  REVIEWING: 'amber',
+  DRAFTING: 'blue',
+  SUBMITTED: 'green',
+};
+const LISTING_STATUS_COLORS = {
+  active: 'green',
+  inactive: 'gray',
+  unknown: 'gray',
+  yes: 'green',
+  no: 'gray',
+};
+const NAICS_CATEGORY_COLORS = {
+  construction: 'orange',
+  manufacturing: 'indigo',
+  transportation_logistics: 'teal',
+  information: 'blue',
+  software: 'violet',
+  software_it: 'violet',
+  it_services: 'violet',
+  professional_services: 'purple',
+  engineering: 'blue',
+  management_consulting: 'rose',
+  consulting: 'rose',
+  administrative_support: 'gray',
+  education: 'yellow',
+  healthcare: 'red',
+  healthcare_social_assistance: 'red',
+  public_administration: 'slate',
+  aerospace: 'sky',
+  other: 'gray',
+};
+
+function getProgressOptionClass(value, selectedValue) {
+  const colorName = PROGRESS_STATUS_COLORS[value] || 'gray';
+  const activeClass = selectedValue === value ? 'progress-option-active' : '';
+  return `progress-option progress-option-${colorName} ${activeClass}`.trim();
+}
+
+function getWorkflowBadgeClass(status) {
+  const colorName = WORKFLOW_STATUS_COLORS[status] || 'gray';
+  return `status-tag status-color-${colorName}`;
+}
+
+function getListingStatusClass(status) {
+  const normalizedStatus = String(status || 'unknown').trim().toLowerCase();
+  const colorName = LISTING_STATUS_COLORS[normalizedStatus] || 'gray';
+  return `info-pill status-color-${colorName}`;
+}
+
+function getNaicsCategoryClass(category) {
+  const normalizedCategory = String(category || 'other').trim().toLowerCase();
+  const colorName = NAICS_CATEGORY_COLORS[normalizedCategory] || 'gray';
+  return `info-pill naics-tag naics-tag-${colorName}`;
+}
 
 function formatDate(value) {
   if (!value) {
@@ -28,7 +97,10 @@ function formatDate(value) {
 function ContractDetailPage() {
   const { contractId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const workspaceReturn = location.state?.workspaceReturn;
   const token = localStorage.getItem('token');
+  const unreadCount = useNotificationSummary();
   const [contract, setContract] = useState(null);
   const [contractProgress, setContractProgress] = useState('NONE');
   const [workflowStatus, setWorkflowStatus] = useState('NOT_STARTED');
@@ -124,6 +196,16 @@ function ContractDetailPage() {
     }
   };
 
+  const handleBackToContracts = () => {
+    navigate(workspaceReturn?.pathname || '/dashboard', {
+      state: workspaceReturn ? { restoreWorkspace: workspaceReturn } : undefined,
+    });
+  };
+
+  const backButtonLabel = workspaceReturn?.pageTitle
+    ? `Back to ${workspaceReturn.pageTitle}`
+    : 'Back to Dashboard';
+
   return (
     <div className="dashboard-layout">
       <aside className="sidebar">
@@ -133,14 +215,20 @@ function ContractDetailPage() {
           <button className="sidebar-link" onClick={() => navigate('/dashboard')}>
             Dashboard
           </button>
-          <button className="sidebar-link" onClick={() => navigate('/dashboard')}>
+          <button className="sidebar-link" onClick={() => navigate('/ai-matchmaking')}>
             AI Matchmaking
+          </button>
+          <button className="sidebar-link" onClick={() => navigate('/my-contracts')}>
+            My Contracts
           </button>
           <button className="sidebar-link" onClick={() => navigate('/profile')}>
             Profile
           </button>
           <button className="sidebar-link" onClick={() => navigate('/notifications')}>
-            Notifications
+            <span className="sidebar-link-content">
+              <span>Notifications</span>
+              {unreadCount > 0 && <span className="nav-notification-badge">{unreadCount}</span>}
+            </span>
           </button>
         </nav>
       </aside>
@@ -148,18 +236,10 @@ function ContractDetailPage() {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <button className="notes-cancel-button" onClick={() => navigate('/dashboard')}>
-              Back to Dashboard
+            <button className="notes-cancel-button" onClick={handleBackToContracts}>
+              {backButtonLabel}
             </button>
             <div className="topbar-icons">
-              <span
-                className="profile-icon-circle"
-                onClick={() => navigate('/notifications')}
-                style={{ cursor: 'pointer' }}
-                title="Notifications"
-              >
-                3
-              </span>
               <span
                 className="profile-icon-placeholder"
                 onClick={() => navigate('/profile')}
@@ -183,7 +263,6 @@ function ContractDetailPage() {
                 <h1 className="page-title">{contract.title}</h1>
 
                 {error && <div className="state-card state-card-error detail-message">{error}</div>}
-                {successMessage && <div className="state-card detail-success-message">{successMessage}</div>}
 
                 <section className="section detail-section">
                   <h2 className="section-title">Contract Details</h2>
@@ -198,7 +277,11 @@ function ContractDetailPage() {
                     </div>
                     <div>
                       <span className="detail-label">NAICS</span>
-                      <p>{contract.naics_code || 'Not provided'}</p>
+                      <p>
+                        <span className={getNaicsCategoryClass(contract.category)}>
+                          {contract.naics_code || 'Not provided'}
+                        </span>
+                      </p>
                     </div>
                     <div>
                       <span className="detail-label">Deadline</span>
@@ -210,7 +293,11 @@ function ContractDetailPage() {
                     </div>
                     <div>
                       <span className="detail-label">Status</span>
-                      <p>{contract.status || 'Not provided'}</p>
+                      <p>
+                        <span className={getListingStatusClass(contract.status)}>
+                          {contract.status || 'Unknown'}
+                        </span>
+                      </p>
                     </div>
                   </div>
 
@@ -228,11 +315,12 @@ function ContractDetailPage() {
 
                 <section className="section detail-section">
                   <h2 className="section-title">Progress</h2>
+                  {successMessage && <div className="state-card detail-success-message">{successMessage}</div>}
                   <div className="progress-control-group">
                     {PROGRESS_OPTIONS.map((option) => (
                       <label
                         key={option.value}
-                        className={`progress-option ${contractProgress === option.value ? 'progress-option-active' : ''}`}
+                        className={getProgressOptionClass(option.value, contractProgress)}
                       >
                         <input
                           type="radio"
@@ -255,11 +343,15 @@ function ContractDetailPage() {
                     value={workflowStatus}
                     onChange={(event) => setWorkflowStatus(event.target.value)}
                   >
-                    <option value="NOT_STARTED">Not Started</option>
-                    <option value="REVIEWING">Reviewing</option>
-                    <option value="DRAFTING">Drafting</option>
-                    <option value="SUBMITTED">Submitted</option>
+                    {WORKFLOW_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
+                  <span className={getWorkflowBadgeClass(workflowStatus)}>
+                    {WORKFLOW_OPTIONS.find((option) => option.value === workflowStatus)?.label || workflowStatus}
+                  </span>
 
                   <label className="status-label" htmlFor="contractNotes">
                     Notes

@@ -69,6 +69,7 @@ class OpportunityApiTests(APITestCase):
             agency='DoD',
             status='Reviewing',
             partner_name='Northwind Systems',
+            category='engineering',
         )
         Contract.objects.create(
             source='procurement',
@@ -110,9 +111,18 @@ class OpportunityApiTests(APITestCase):
         self.assertIn('title', response.data[0])
         self.assertIn('description', response.data[0])
         self.assertIn('naics_code', response.data[0])
+        self.assertIn('naics_category', response.data[0])
         self.assertIn('agency', response.data[0])
         self.assertIn('status', response.data[0])
         self.assertIn('partner', response.data[0])
+        self.assertIn('contract_progress', response.data[0])
+        self.assertIn('workflow_status', response.data[0])
+
+    def test_opportunity_payload_includes_naics_category(self):
+        response = self.client.get('/api/opportunities/?search=cyber')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]['naics_category'], 'engineering')
 
     def test_search_by_keyword(self):
         response = self.client.get('/api/opportunities/?search=cloud')
@@ -141,6 +151,47 @@ class OpportunityApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['status'], 'Submitted')
+
+    def test_status_values_are_normalized_in_payload_and_filtering(self):
+        Contract.objects.create(
+            source='procurement',
+            title='Legacy Active Contract',
+            summary='Legacy active row.',
+            naics_code='541511',
+            agency='NASA',
+            status='Yes',
+        )
+        Contract.objects.create(
+            source='procurement',
+            title='Legacy Inactive Contract',
+            summary='Legacy inactive row.',
+            naics_code='541512',
+            agency='DOE',
+            status='No',
+        )
+
+        response = self.client.get('/api/opportunities/?agency=nasa')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]['status'], 'Active')
+
+        active_filter_response = self.client.get('/api/opportunities/?status=active')
+        self.assertEqual(active_filter_response.status_code, 200)
+        self.assertTrue(
+            any(item['title'] == 'Legacy Active Contract' for item in active_filter_response.data)
+        )
+        self.assertTrue(
+            all(item['status'] == 'Active' for item in active_filter_response.data)
+        )
+
+        inactive_filter_response = self.client.get('/api/opportunities/?status=inactive')
+        self.assertEqual(inactive_filter_response.status_code, 200)
+        self.assertTrue(
+            any(item['title'] == 'Legacy Inactive Contract' for item in inactive_filter_response.data)
+        )
+        self.assertTrue(
+            all(item['status'] == 'Inactive' for item in inactive_filter_response.data)
+        )
 
     def test_apply_all_filters_together(self):
         response = self.client.get('/api/opportunities/?search=cloud&naics_code=541330&agency=va&status=drafting')
