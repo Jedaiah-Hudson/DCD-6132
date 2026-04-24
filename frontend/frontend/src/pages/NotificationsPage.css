@@ -7,7 +7,7 @@
 }
 
 .notifications-sidebar {
-  width: 270px;
+  width: 240px;
   border-right: 1px solid #d9d9d9;
   background-color: #f8f8f8;
   padding: 24px 16px;
@@ -15,10 +15,9 @@
 }
 
 .notifications-sidebar-title {
-  font-size: 1.5rem;
+  font-size: 1.9rem;
   font-weight: 700;
   margin-bottom: 32px;
-  line-height: 1.3;
 }
 
 .notifications-sidebar-nav {
