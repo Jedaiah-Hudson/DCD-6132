@@ -37,6 +37,27 @@
     cursor: pointer;
 }
 
+.sidebar-link-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-notification-badge {
+    min-width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background-color: #111827;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0 6px;
+    box-sizing: border-box;
+}
+
 .sidebar-link.active {
     background-color: #ececec;
     color: #111827;

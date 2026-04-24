@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
 import NaicsMultiSelect from '../components/NaicsMultiSelect';
+import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf'];
 const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf'];
@@ -77,6 +78,7 @@ function ProfilePage() {
   const [removingLinkedEmailId, setRemovingLinkedEmailId] = useState(null);
 
   const token = localStorage.getItem('token');
+  const unreadCount = useNotificationSummary();
 
   const structuredData = {
     company_name: companyName,
@@ -360,7 +362,10 @@ function ProfilePage() {
             Profile
           </button>
           <button className="profile-sidebar-link" onClick={() => navigate('/notifications')}>
-            Notifications
+            <span className="profile-sidebar-link-content">
+              <span>Notifications</span>
+              {unreadCount > 0 && <span className="profile-nav-notification-badge">{unreadCount}</span>}
+            </span>
           </button>
         </nav>
       </aside>
@@ -374,15 +379,6 @@ function ProfilePage() {
               className="profile-search-bar"
             />
             <div className="profile-topbar-icons">
-              <span
-                className="profile-icon-circle"
-                onClick={() => navigate('/notifications')}
-                style={{ cursor: 'pointer' }}
-                title="Notifications"
-              >
-                3
-              </span>
-
               <span
                 className="profile-icon-placeholder"
                 onClick={() => navigate('/profile')}

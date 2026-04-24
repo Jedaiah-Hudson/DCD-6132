@@ -84,6 +84,57 @@ class UserContractProgress(models.Model):
     def __str__(self):
         return f"{self.user} - {self.contract.title} - {self.contract_progress}"
 
+
+class ContractNotification(models.Model):
+
+    class NotificationType(models.TextChoices):
+        DEADLINE = "DEADLINE", "Deadline"
+        STATUS = "STATUS", "Status"
+        PROGRESS = "PROGRESS", "Progress"
+        WORKFLOW = "WORKFLOW", "Workflow"
+
+    class SeverityChoices(models.TextChoices):
+        INFO = "INFO", "Info"
+        LOW = "LOW", "Low"
+        MEDIUM = "MEDIUM", "Medium"
+        HIGH = "HIGH", "High"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="contract_notifications"
+    )
+
+    contract = models.ForeignKey(
+        Contract,
+        on_delete=models.CASCADE,
+        related_name="contract_notifications"
+    )
+
+    notification_type = models.CharField(
+        max_length=20,
+        choices=NotificationType.choices,
+    )
+    severity = models.CharField(
+        max_length=10,
+        choices=SeverityChoices.choices,
+        default=SeverityChoices.INFO,
+    )
+    unique_key = models.CharField(max_length=255)
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    due_at = models.DateTimeField(null=True, blank=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "unique_key")
+        ordering = ("is_read", "-created_at")
+
+    def __str__(self):
+        return f"{self.user} - {self.title}"
+
 class ContractNote(models.Model):
     contract = models.ForeignKey(
         Contract,

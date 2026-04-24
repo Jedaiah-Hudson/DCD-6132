@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import './DashboardPage.css';
 import './ContractDetailPage.css';
+import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
 const PROGRESS_OPTIONS = [
@@ -99,6 +100,7 @@ function ContractDetailPage() {
   const location = useLocation();
   const workspaceReturn = location.state?.workspaceReturn;
   const token = localStorage.getItem('token');
+  const unreadCount = useNotificationSummary();
   const [contract, setContract] = useState(null);
   const [contractProgress, setContractProgress] = useState('NONE');
   const [workflowStatus, setWorkflowStatus] = useState('NOT_STARTED');
@@ -223,7 +225,10 @@ function ContractDetailPage() {
             Profile
           </button>
           <button className="sidebar-link" onClick={() => navigate('/notifications')}>
-            Notifications
+            <span className="sidebar-link-content">
+              <span>Notifications</span>
+              {unreadCount > 0 && <span className="nav-notification-badge">{unreadCount}</span>}
+            </span>
           </button>
         </nav>
       </aside>
@@ -235,14 +240,6 @@ function ContractDetailPage() {
               {backButtonLabel}
             </button>
             <div className="topbar-icons">
-              <span
-                className="profile-icon-circle"
-                onClick={() => navigate('/notifications')}
-                style={{ cursor: 'pointer' }}
-                title="Notifications"
-              >
-                3
-              </span>
               <span
                 className="profile-icon-placeholder"
                 onClick={() => navigate('/profile')}
