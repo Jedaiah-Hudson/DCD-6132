@@ -12,8 +12,6 @@ const LISTING_STATUS_COLORS = {
   reviewing: 'amber',
   drafting: 'blue',
   submitted: 'green',
-  yes: 'green',
-  no: 'gray',
 };
 const PROGRESS_STATUS_COLORS = {
   NONE: 'gray',
