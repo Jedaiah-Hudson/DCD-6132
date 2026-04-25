@@ -17,12 +17,13 @@ const WORKFLOW_OPTIONS = [
   { value: 'DRAFTING', label: 'Drafting' },
   { value: 'SUBMITTED', label: 'Submitted' },
 ];
-const PURSUIT_ROLE_OPTIONS = [
-  { value: 'UNDECIDED', label: 'Undecided' },
+const RELATIONSHIP_OPTIONS = [
+  { value: 'UNASSIGNED', label: 'Unassigned' },
   { value: 'PRIME', label: 'Prime' },
-  { value: 'SUBCONTRACTING', label: 'Subcontracting' },
+  { value: 'SUBCONTRACTOR', label: 'Sub' },
   { value: 'TEAMING', label: 'Teaming' },
-  { value: 'PARTNERSHIP', label: 'Partnership' },
+  { value: 'VENDOR', label: 'Vendor' },
+  { value: 'CONSULTANT', label: 'Consultant' },
 ];
 const PROGRESS_STATUS_COLORS = {
   NONE: 'gray',
@@ -35,6 +36,14 @@ const WORKFLOW_STATUS_COLORS = {
   REVIEWING: 'amber',
   DRAFTING: 'blue',
   SUBMITTED: 'green',
+};
+const RELATIONSHIP_LABEL_COLORS = {
+  UNASSIGNED: 'gray',
+  PRIME: 'green',
+  SUBCONTRACTOR: 'blue',
+  TEAMING: 'purple',
+  VENDOR: 'amber',
+  CONSULTANT: 'teal',
 };
 const LISTING_STATUS_COLORS = {
   active: 'green',
@@ -75,6 +84,11 @@ function getWorkflowBadgeClass(status) {
   return `status-tag status-color-${colorName}`;
 }
 
+function getRelationshipBadgeClass(label) {
+  const colorName = RELATIONSHIP_LABEL_COLORS[label] || 'gray';
+  return `status-tag status-color-${colorName}`;
+}
+
 function getListingStatusClass(status) {
   const normalizedStatus = String(status || 'unknown').trim().toLowerCase();
   const colorName = LISTING_STATUS_COLORS[normalizedStatus] || 'gray';
@@ -111,7 +125,7 @@ function ContractDetailPage() {
   const [contract, setContract] = useState(null);
   const [contractProgress, setContractProgress] = useState('NONE');
   const [workflowStatus, setWorkflowStatus] = useState('NOT_STARTED');
-  const [pursuitRole, setPursuitRole] = useState('UNDECIDED');
+  const [relationshipLabel, setRelationshipLabel] = useState('UNASSIGNED');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -151,7 +165,7 @@ function ContractDetailPage() {
         setContract(contractData.contract);
         setContractProgress(progressData.contract_progress || 'NONE');
         setWorkflowStatus(progressData.workflow_status || 'NOT_STARTED');
-        setPursuitRole(progressData.pursuit_role || 'UNDECIDED');
+        setRelationshipLabel(progressData.relationship_label || 'UNASSIGNED');
         setNotes(progressData.notes || '');
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
@@ -184,7 +198,7 @@ function ContractDetailPage() {
         body: JSON.stringify({
           contract_progress: contractProgress,
           workflow_status: workflowStatus,
-          pursuit_role: pursuitRole,
+          relationship_label: relationshipLabel,
           notes,
         }),
       });
@@ -197,7 +211,7 @@ function ContractDetailPage() {
 
       setContractProgress(data.contract_progress || 'NONE');
       setWorkflowStatus(data.workflow_status || 'NOT_STARTED');
-      setPursuitRole(data.pursuit_role || 'UNDECIDED');
+      setRelationshipLabel(data.relationship_label || 'UNASSIGNED');
       setNotes(data.notes || '');
       setSuccessMessage('Progress saved.');
     } catch (saveError) {
@@ -216,6 +230,12 @@ function ContractDetailPage() {
   const backButtonLabel = workspaceReturn?.pageTitle
     ? `Back to ${workspaceReturn.pageTitle}`
     : 'Back to Dashboard';
+
+  const shouldShowRfpButton = workspaceReturn?.pathname === '/my-contracts';
+
+  const handleGenerateRfp = () => {
+    navigate('/rfp-generator', { state: { selectedContractId: Number(contractId) } });
+  };
 
   return (
     <div className="dashboard-layout">
@@ -320,21 +340,20 @@ function ContractDetailPage() {
                     <p>{contract.summary || 'No summary available.'}</p>
                   </div>
 
-                  {contract.matched_reasons?.length > 0 && (
-                    <div className="detail-summary">
-                      <span className="detail-label">Matched reasons</span>
-                      <ul className="matched-reasons-list">
-                        {contract.matched_reasons.map((reason) => (
-                          <li key={reason}>{reason}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
                   {contract.hyperlink && (
                     <a className="detail-link" href={contract.hyperlink} target="_blank" rel="noreferrer">
                       Open source listing
                     </a>
+                  )}
+
+                  {shouldShowRfpButton && (
+                    <button
+                      className="notes-save-button detail-rfp-button"
+                      type="button"
+                      onClick={handleGenerateRfp}
+                    >
+                      Generate RFP
+                    </button>
                   )}
                 </section>
 
@@ -378,21 +397,24 @@ function ContractDetailPage() {
                     {WORKFLOW_OPTIONS.find((option) => option.value === workflowStatus)?.label || workflowStatus}
                   </span>
 
-                  <label className="status-label" htmlFor="pursuitRole">
-                    Pursuit role
+                  <label className="status-label" htmlFor="relationshipLabel">
+                    Prime/Sub/Teaming label
                   </label>
                   <select
-                    id="pursuitRole"
+                    id="relationshipLabel"
                     className="status-select detail-workflow-select"
-                    value={pursuitRole}
-                    onChange={(event) => setPursuitRole(event.target.value)}
+                    value={relationshipLabel}
+                    onChange={(event) => setRelationshipLabel(event.target.value)}
                   >
-                    {PURSUIT_ROLE_OPTIONS.map((option) => (
+                    {RELATIONSHIP_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </select>
+                  <span className={getRelationshipBadgeClass(relationshipLabel)}>
+                    {RELATIONSHIP_OPTIONS.find((option) => option.value === relationshipLabel)?.label || relationshipLabel}
+                  </span>
 
                   <label className="status-label" htmlFor="contractNotes">
                     Notes
