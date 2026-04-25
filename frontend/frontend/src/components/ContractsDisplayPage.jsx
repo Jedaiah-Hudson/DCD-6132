@@ -85,17 +85,20 @@ const NAICS_CATEGORY_COLORS = {
   research_development: 'purple',
   other: 'gray',
 };
+const DISMISSED_STORAGE_KEY = 'dismissedDashboardOpportunities';
 const WORKSPACE_CONFIG = {
   dashboard: {
     pageTitle: 'Dashboard',
     searchPlaceholder: 'Search opportunities...',
     sectionTitle: 'Explore Contracts',
-    sectionHelperText: 'Filter live opportunities by agency, status, NAICS code, and search terms.',
+    sectionHelperText: 'Filter live opportunities by agency, partner, status, NAICS code, and search terms.',
     recentTitle: 'Recent Opportunities',
     emptyMessage: 'No opportunities match the selected filters.',
+    loadingMessage: 'Loading opportunities from the backend...',
     activeNav: 'dashboard',
     showSummary: true,
     showSync: true,
+    allowDismiss: true,
   },
   matchmaking: {
     pageTitle: 'AI Matchmaking',
@@ -103,13 +106,15 @@ const WORKSPACE_CONFIG = {
     sectionTitle: 'Matched Contracts',
     sectionHelperText: 'Get matched with the top capability statements for you based on your profile, NAICS codes, and uploaded materials.',
     recentTitle: 'Closest Matches',
-    emptyMessage: 'No matched contracts fit the current filters.',
+    emptyMessage: 'No matched contracts fit the current filters. Try clearing a filter or broadening your search.',
+    loadingMessage: 'Finding profile-based matches for your account...',
     activeNav: 'matchmaking',
     showSummary: false,
     showSync: false,
     overviewTitle: 'Profile-Based Matches',
     overviewText: 'Get matched with the best-fit contracts for your business using your profile and capability statement details.',
     overviewMetricLabel: 'Matched',
+    allowDismiss: false,
   },
   myContracts: {
     pageTitle: 'My Contracts',
@@ -118,12 +123,14 @@ const WORKSPACE_CONFIG = {
     sectionHelperText: 'This board shows contracts where progress moved beyond Not tracked or workflow moved beyond Not Started.',
     recentTitle: 'Recently Tracked',
     emptyMessage: 'No tracked contracts fit the current filters.',
+    loadingMessage: 'Loading tracked contracts...',
     activeNav: 'my-contracts',
     showSummary: false,
     showSync: false,
     overviewTitle: 'Current Workboard',
     overviewText: 'Contracts land here when you start actively working them, whether that means progress labels or workflow steps.',
     overviewMetricLabel: 'Active',
+    allowDismiss: false,
   },
 };
 
@@ -175,6 +182,20 @@ function formatLastSynced() {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function readDismissedOpportunities() {
+  try {
+    const storedValue = window.localStorage.getItem(DISMISSED_STORAGE_KEY);
+    const parsedValue = JSON.parse(storedValue || '[]');
+    return Array.isArray(parsedValue) ? parsedValue : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedOpportunities(ids) {
+  window.localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(ids));
 }
 
 async function syncSamOpportunities(limit = 10) {
@@ -266,7 +287,9 @@ function ContractsDisplayPage({ workspaceType }) {
   const [searchTerm, setSearchTerm] = useState(restoreWorkspaceState?.searchTerm || '');
   const [selectedNaics, setSelectedNaics] = useState(restoreWorkspaceState?.selectedNaics || '');
   const [selectedAgency, setSelectedAgency] = useState(restoreWorkspaceState?.selectedAgency || '');
+  const [selectedPartner, setSelectedPartner] = useState(restoreWorkspaceState?.selectedPartner || '');
   const [selectedStatus, setSelectedStatus] = useState(restoreWorkspaceState?.selectedStatus || '');
+  const [dismissedOpportunityIds, setDismissedOpportunityIds] = useState(() => readDismissedOpportunities());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -325,47 +348,58 @@ function ContractsDisplayPage({ workspaceType }) {
     return () => controller.abort();
   }, [config.showSummary, token, workspaceType]);
 
+  useEffect(() => {
+    writeDismissedOpportunities(dismissedOpportunityIds);
+  }, [dismissedOpportunityIds]);
+
   const workspaceOpportunities = useMemo(() => {
+    const visibleOpportunities = config.allowDismiss
+      ? allOpportunities.filter((opportunity) => !dismissedOpportunityIds.includes(opportunity.id))
+      : allOpportunities;
+
     if (workspaceType === 'myContracts') {
-      return allOpportunities.filter(isTrackedContract);
+      return visibleOpportunities.filter(isTrackedContract);
     }
 
-    return allOpportunities;
-  }, [allOpportunities, workspaceType]);
+    return visibleOpportunities;
+  }, [allOpportunities, config.allowDismiss, dismissedOpportunityIds, workspaceType]);
 
-  const agencyOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        workspaceOpportunities
-          .map((opportunity) => opportunity.agency)
-          .filter(Boolean)
-      )
-    ).sort((left, right) => left.localeCompare(right));
-  }, [workspaceOpportunities]);
+  const agencyOptions = useMemo(() => Array.from(
+    new Set(
+      workspaceOpportunities
+        .map((opportunity) => opportunity.agency)
+        .filter(Boolean)
+    )
+  ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
-  const naicsOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        workspaceOpportunities
-          .map((opportunity) => opportunity.naics_code)
-          .filter(Boolean)
-      )
-    ).sort();
-  }, [workspaceOpportunities]);
+  const partnerOptions = useMemo(() => Array.from(
+    new Set(
+      workspaceOpportunities
+        .map((opportunity) => opportunity.partner)
+        .filter(Boolean)
+    )
+  ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
-  const statusOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        workspaceOpportunities
-          .map((opportunity) => opportunity.status)
-          .filter(Boolean)
-      )
-    ).sort((left, right) => left.localeCompare(right));
-  }, [workspaceOpportunities]);
+  const naicsOptions = useMemo(() => Array.from(
+    new Set(
+      workspaceOpportunities
+        .map((opportunity) => opportunity.naics_code)
+        .filter(Boolean)
+    )
+  ).sort(), [workspaceOpportunities]);
+
+  const statusOptions = useMemo(() => Array.from(
+    new Set(
+      workspaceOpportunities
+        .map((opportunity) => opportunity.status)
+        .filter(Boolean)
+    )
+  ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
   const filteredOpportunities = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const normalizedAgency = selectedAgency.trim().toLowerCase();
+    const normalizedPartner = selectedPartner.trim().toLowerCase();
     const normalizedStatus = selectedStatus.trim().toLowerCase();
 
     return workspaceOpportunities.filter((opportunity) => {
@@ -382,17 +416,19 @@ function ContractsDisplayPage({ workspaceType }) {
         .toLowerCase();
 
       const opportunityAgency = String(opportunity.agency || '').trim().toLowerCase();
+      const opportunityPartner = String(opportunity.partner || '').trim().toLowerCase();
       const opportunityStatus = String(opportunity.status || '').trim().toLowerCase();
       const opportunityNaics = String(opportunity.naics_code || '').trim();
 
       const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
       const matchesAgency = !normalizedAgency || opportunityAgency === normalizedAgency;
+      const matchesPartner = !normalizedPartner || opportunityPartner === normalizedPartner;
       const matchesStatus = !normalizedStatus || opportunityStatus === normalizedStatus;
       const matchesNaics = !selectedNaics || opportunityNaics === selectedNaics;
 
-      return matchesSearch && matchesAgency && matchesStatus && matchesNaics;
+      return matchesSearch && matchesAgency && matchesPartner && matchesStatus && matchesNaics;
     });
-  }, [workspaceOpportunities, searchTerm, selectedAgency, selectedStatus, selectedNaics]);
+  }, [workspaceOpportunities, searchTerm, selectedAgency, selectedPartner, selectedStatus, selectedNaics]);
 
   const recentOpportunities = useMemo(() => filteredOpportunities.slice(0, 3), [filteredOpportunities]);
 
@@ -430,6 +466,7 @@ function ContractsDisplayPage({ workspaceType }) {
           searchTerm,
           selectedNaics,
           selectedAgency,
+          selectedPartner,
           selectedStatus,
         },
       },
@@ -447,13 +484,18 @@ function ContractsDisplayPage({ workspaceType }) {
     try {
       await syncSamOpportunities(10);
 
+      const summaryPromise = config.showSummary
+        ? fetchProgressSummary(undefined, token)
+        : Promise.resolve(progressSummary);
       const [catalogData, summaryData] = await Promise.all([
-        fetchOpportunities(undefined, token),
-        fetchProgressSummary(undefined, token),
+        fetchOpportunities(undefined, token, { matchUser: workspaceType === 'matchmaking' }),
+        summaryPromise,
       ]);
 
       setAllOpportunities(catalogData);
-      setProgressSummary(summaryData);
+      if (config.showSummary) {
+        setProgressSummary(summaryData);
+      }
       setLastSynced(formatLastSynced());
     } catch (fetchError) {
       const isNetworkError = fetchError instanceof TypeError;
@@ -466,6 +508,14 @@ function ContractsDisplayPage({ workspaceType }) {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handleDismissOpportunity = (opportunityId) => {
+    setDismissedOpportunityIds((currentIds) => (
+      currentIds.includes(opportunityId)
+        ? currentIds
+        : [...currentIds, opportunityId]
+    ));
   };
 
   return (
@@ -613,6 +663,24 @@ function ContractsDisplayPage({ workspaceType }) {
                   </select>
                 </div>
                 <div className="filter-group">
+                  <label htmlFor="partnerFilter" className="filter-label">
+                    Partner
+                  </label>
+                  <select
+                    id="partnerFilter"
+                    className="partner-filter"
+                    value={selectedPartner}
+                    onChange={(event) => setSelectedPartner(event.target.value)}
+                  >
+                    <option value="">All Partners</option>
+                    {partnerOptions.map((partner) => (
+                      <option key={partner} value={partner}>
+                        {partner}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-group">
                   <label htmlFor="naicsFilter" className="filter-label">
                     NAICS Code
                   </label>
@@ -651,7 +719,7 @@ function ContractsDisplayPage({ workspaceType }) {
               </div>
 
               {loading ? (
-                <div className="state-card">Loading opportunities...</div>
+                <div className="state-card">{config.loadingMessage}</div>
               ) : error ? (
                 <div className="state-card state-card-error">{error}</div>
               ) : filteredOpportunities.length === 0 ? (
@@ -669,7 +737,7 @@ function ContractsDisplayPage({ workspaceType }) {
                         data-contract-id={opportunity.id}
                       >
                         <div className="card-heading-row">
-                          <div>
+                          <div className="card-heading-copy">
                             <div className="title-row">
                               <h3>{opportunity.title}</h3>
                               <span
@@ -700,18 +768,33 @@ function ContractsDisplayPage({ workspaceType }) {
                               </div>
                             )}
                           </div>
-                          <button
-                            className="note-action-button"
-                            type="button"
-                            onClick={() => handleViewDetails(opportunity.id)}
-                          >
-                            View Details
-                          </button>
+                          <div className="card-action-stack">
+                            <button
+                              className="note-action-button"
+                              type="button"
+                              onClick={() => handleViewDetails(opportunity.id)}
+                            >
+                              View Details
+                            </button>
+                            {config.allowDismiss && (
+                              <button
+                                className="note-secondary-button"
+                                type="button"
+                                onClick={() => handleDismissOpportunity(opportunity.id)}
+                              >
+                                Not Interested
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <p>
                           <strong>Agency:</strong>{' '}
                           <span className="info-pill agency-pill">{opportunity.agency || 'Not provided'}</span>
+                        </p>
+                        <p>
+                          <strong>Partner:</strong>{' '}
+                          <span className="info-pill partner-pill">{opportunity.partner || 'Not provided'}</span>
                         </p>
                         <p>
                           <strong>NAICS Code:</strong>{' '}
@@ -759,7 +842,7 @@ function ContractsDisplayPage({ workspaceType }) {
                               className={getNaicsCategoryClass(opportunity.naics_category)}
                               title={formatNaicsCategory(opportunity.naics_category)}
                             >
-                              {opportunity.naics_code}
+                              {opportunity.naics_code || 'Not provided'}
                             </span>
                           </td>
                         </tr>

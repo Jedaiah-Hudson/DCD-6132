@@ -436,3 +436,56 @@
     align-items: flex-start;
   }
 }
+
+
+.profile-section-heading-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mailbox-card-with-actions {
+  align-items: flex-start;
+}
+
+.mailbox-sync-meta {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.mailbox-actions-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.mailbox-actions-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mailbox-action-button {
+  min-width: 96px;
+}
+
+@media (max-width: 720px) {
+  .profile-section-heading-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mailbox-actions-column {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .mailbox-actions-row {
+    justify-content: stretch;
+  }
+}
