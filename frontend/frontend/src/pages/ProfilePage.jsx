@@ -523,6 +523,11 @@ function ProfilePage() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/');
+  };
+
   return (
     <div className="profile-layout">
       <aside className="profile-sidebar">
@@ -573,10 +578,21 @@ function ProfilePage() {
 
         <main className="profile-content">
           <div className="profile-inner">
-            <h1 className="profile-page-title">Profile</h1>
-            <p className="profile-subtitle">
-              Enter your profile manually anytime, and optionally use document extraction to pre-fill fields.
-            </p>
+            <div className="profile-page-heading-row">
+              <div>
+                <h1 className="profile-page-title">Profile</h1>
+                <p className="profile-subtitle">
+                  Enter your profile manually anytime, and optionally use document extraction to pre-fill fields.
+                </p>
+              </div>
+              <button
+                className="profile-light-button profile-logout-button"
+                type="button"
+                onClick={handleLogout}
+              >
+                Log Out
+              </button>
+            </div>
 
             {uploadError && <p className="profile-error-message">{uploadError}</p>}
             {successMessage && <p className="profile-success-message">{successMessage}</p>}
