@@ -9,11 +9,32 @@ body,
 
 body {
   min-width: 320px;
-  background: #ffffff;
-  font-family: Arial, sans-serif;
-  color: #111827;
+  background:
+    radial-gradient(circle at top right, rgba(77, 145, 179, 0.18), transparent 28%),
+    linear-gradient(180deg, #edf5f9 0%, #e4eef4 100%);
+  font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  color: #20303a;
 }
 
 * {
   box-sizing: border-box;
+}
+
+:root {
+  --pinkstem-accent: #4d91b3;
+  --pinkstem-accent-strong: #3f82a4;
+  --pinkstem-accent-soft: #cfe3ef;
+  --pinkstem-accent-faint: #e8f1f6;
+  --pinkstem-cream: #eaf2f7;
+  --pinkstem-surface: #ffffff;
+  --pinkstem-surface-muted: #edf5f9;
+  --pinkstem-panel: rgba(255, 255, 255, 0.96);
+  --pinkstem-border: #bdd3df;
+  --pinkstem-border-strong: #a8c4d3;
+  --pinkstem-text: #20303a;
+  --pinkstem-muted: #6a7d88;
+  --pinkstem-heading-font: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  --pinkstem-body-font: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  --pinkstem-shadow: 0 16px 40px rgba(57, 96, 122, 0.12);
+  --pinkstem-shadow-soft: 0 8px 24px rgba(57, 96, 122, 0.08);
 }
