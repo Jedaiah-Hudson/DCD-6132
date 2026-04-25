@@ -15,14 +15,22 @@ export default function NaicsMultiSelect({ value, onChange }) {
           label: `${item.code} - ${item.title}`,
         }));
 
-        setOptions(formatted);
+        const fetchedValues = new Set(formatted.map((item) => item.value));
+        const selectedMissingOptions = (value || [])
+          .filter((code) => code && !fetchedValues.has(code))
+          .map((code) => ({
+            value: code,
+            label: `${code} - Extracted from capability profile`,
+          }));
+
+        setOptions([...formatted, ...selectedMissingOptions]);
       } catch (err) {
         console.error('Failed to load NAICS codes', err);
       }
     };
 
     fetchNaics();
-  }, []);
+  }, [value]);
 
   return (
     <div style={{ minWidth: 300 }}>

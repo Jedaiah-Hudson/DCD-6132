@@ -1,7 +1,7 @@
 {% extends 'core/base.html' %}
 {% block content %}
 <h1>Profile</h1>
-<p>Enter your profile manually anytime, and optionally use PDF OCR to pre-fill fields.</p>
+<p>Enter your profile manually anytime, and optionally use document extraction to pre-fill fields.</p>
 
 <h2>Capability Profile</h2>
 <form method="post" enctype="multipart/form-data">
@@ -23,7 +23,7 @@
     <p>{{ profile_form.contact_phone.label_tag }} {{ profile_form.contact_phone }}</p>
     <p>{{ profile_form.website.label_tag }} {{ profile_form.website }}</p>
 
-    <button type="submit" name="action" value="extract_ocr">Extract + Prefill from PDF</button>
+    <button type="submit" name="action" value="extract_ocr">Extract + Prefill from Document</button>
     <button type="submit" name="action" value="submit_profile">{% if editing %}Update Profile{% else %}Save Profile{% endif %}</button>
 </form>
 

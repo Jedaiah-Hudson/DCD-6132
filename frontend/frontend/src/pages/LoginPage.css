@@ -4,15 +4,18 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background: white;
+    background:
+      linear-gradient(180deg, rgba(77, 145, 179, 1), rgba(63, 130, 164, 1));
   }
 
 .login-card {
   width: 100%;
   max-width: 420px;
-  background: #f5f5f5;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--pinkstem-border);
+  border-radius: 18px;
   padding: 40px;
+  box-shadow: var(--pinkstem-shadow);
 }
 
 .login-title {
@@ -20,7 +23,8 @@
   margin-bottom: 36px;
   font-size: 2rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--pinkstem-accent-strong);
+  font-family: var(--pinkstem-heading-font);
 }
 
 .login-form {
@@ -37,16 +41,16 @@
 .input-group label {
   margin-bottom: 10px;
   font-weight: 600;
-  color: #111827;
+  color: var(--pinkstem-text);
 }
 
 .input-group input {
     width: 100%;
     padding: 14px 16px;
-    border-radius: 6px;
-    border: 1px solid #cfd4dc;
+    border-radius: 10px;
+    border: 1px solid var(--pinkstem-border);
     background-color: #ffffff;
-    color: #111827;
+    color: var(--pinkstem-text);
     font-size: 1rem;
     box-sizing: border-box;
 }
@@ -57,23 +61,25 @@
   
   .input-group input:focus {
     outline: none;
-    border-color: #bfc5ce;
+    border-color: var(--pinkstem-accent);
+    box-shadow: 0 0 0 3px rgba(77, 145, 179, 0.18);
     background-color: #ffffff;
     color: #111827;
 }
 
 .login-button {
   padding: 16px;
-  background: #444444;
+  background: linear-gradient(135deg, var(--pinkstem-accent), var(--pinkstem-accent-strong));
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 12px 24px rgba(37, 73, 94, 0.22);
 }
 
 .login-button:hover {
-  background: #333333;
+  filter: brightness(0.97);
 }
 
 .login-button:disabled {
@@ -90,11 +96,11 @@
 .text-button {
   background: none;
   border: none;
-  color: #4b5563;
+  color: var(--pinkstem-muted);
   font-weight: 600;
   cursor: pointer;
 }
 
 .text-button:hover {
-  color: #111827;
+  color: var(--pinkstem-accent-strong);
 }

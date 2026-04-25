@@ -1,9 +1,11 @@
 from django import forms
 
+from core.services.capability_extraction import is_supported_capability_document
+
 
 class CapabilityProfileForm(forms.Form):
     capability_pdf = forms.FileField(
-        label='Upload Capability Statement (PDF)',
+        label='Upload Capability Statement (PDF, PNG, JPG, or JPEG)',
         required=False,
     )
     company_name = forms.CharField(required=False)
@@ -20,6 +22,6 @@ class CapabilityProfileForm(forms.Form):
 
     def clean_capability_pdf(self):
         uploaded_file = self.cleaned_data.get('capability_pdf')
-        if uploaded_file and not uploaded_file.name.lower().endswith('.pdf'):
-            raise forms.ValidationError('Please upload a PDF file.')
+        if uploaded_file and not is_supported_capability_document(uploaded_file):
+            raise forms.ValidationError('Please upload a PDF, PNG, JPG, or JPEG file.')
         return uploaded_file

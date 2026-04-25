@@ -1,11 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
 import NaicsMultiSelect from '../components/NaicsMultiSelect';
 import useNotificationSummary from '../hooks/useNotificationSummary';
 
-const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf'];
-const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf'];
+const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
+const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
+
+const defaultMailboxConnections = [
+  {
+    id: 'default-gmail',
+    provider: 'Gmail',
+    email: 'contracts@pinkstem.org',
+    status: 'Connected',
+    lastSynced: 'Not synced yet',
+  },
+  {
+    id: 'default-outlook',
+    provider: 'Outlook',
+    email: 'opportunities@pinkstem.org',
+    status: 'Needs attention',
+    lastSynced: 'Not synced yet',
+  },
+];
 
 function getFileExtension(filename) {
   const normalizedName = String(filename || '').toLowerCase();
@@ -24,28 +41,29 @@ function isAcceptedDocument(file) {
   );
 }
 
-function isPdfDocument(file) {
+function isSupportedDocument(file) {
   if (!file) {
     return false;
   }
 
-  return getFileExtension(file.name) === '.pdf' || file.type === 'application/pdf';
+  return isAcceptedDocument(file);
 }
 
-const defaultMailboxConnections = [
-  {
-    id: 1,
-    provider: 'Gmail',
-    email: 'contracts@pinkstem.org',
-    status: 'Connected',
-  },
-  {
-    id: 2,
-    provider: 'Outlook',
-    email: 'opportunities@pinkstem.org',
-    status: 'Needs attention',
-  },
-];
+function inferMailboxProvider(email) {
+  const normalizedEmail = String(email || '').toLowerCase();
+  return normalizedEmail.includes('outlook') || normalizedEmail.includes('hotmail') || normalizedEmail.includes('live.')
+    ? 'Outlook'
+    : 'Gmail';
+}
+
+function formatMailboxSyncTime() {
+  return new Date().toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -71,6 +89,7 @@ function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [extractedText, setExtractedText] = useState('');
   const [mailboxConnections, setMailboxConnections] = useState(defaultMailboxConnections);
+  const linkedEmailsSectionRef = useRef(null);
   const [linkedEmails, setLinkedEmails] = useState([]);
   const [linkedEmailInput, setLinkedEmailInput] = useState('');
   const [linkedEmailLabel, setLinkedEmailLabel] = useState('');
@@ -79,6 +98,23 @@ function ProfilePage() {
 
   const token = localStorage.getItem('token');
   const unreadCount = useNotificationSummary();
+
+  const mailboxRows = useMemo(() => {
+    const dynamicMailboxRows = linkedEmails.map((linkedEmail) => ({
+      id: `linked-${linkedEmail.id}`,
+      provider: inferMailboxProvider(linkedEmail.email),
+      email: linkedEmail.email,
+      status: 'Needs attention',
+      lastSynced: 'Not synced yet',
+    }));
+
+    const rowMap = new Map();
+    [...defaultMailboxConnections, ...dynamicMailboxRows, ...mailboxConnections].forEach((row) => {
+      rowMap.set(row.email, row);
+    });
+
+    return Array.from(rowMap.values());
+  }, [linkedEmails, mailboxConnections]);
 
   const structuredData = {
     company_name: companyName,
@@ -157,7 +193,7 @@ function ProfilePage() {
 
     if (file && !isAcceptedDocument(file)) {
       setSelectedFile(null);
-      setUploadError('Please upload a PDF file.');
+      setUploadError('Please upload a PDF, PNG, JPG, or JPEG file.');
       setSuccessMessage('');
       e.target.value = '';
       return;
@@ -170,7 +206,7 @@ function ProfilePage() {
 
   const handleExtractPrefill = async () => {
     if (!selectedFile) {
-      setUploadError('Please choose a PDF file first.');
+      setUploadError('Please choose a PDF, PNG, JPG, or JPEG file first.');
       return;
     }
 
@@ -242,18 +278,14 @@ function ProfilePage() {
     }
   };
 
-  const handleConnectMailbox = (provider) => {
-    const defaultEmail = provider === 'Gmail'
-      ? 'new.gmail.connection@example.com'
-      : 'new.outlook.connection@example.com';
-
+  const handleConnectMailbox = (email, provider) => {
     setMailboxConnections((currentConnections) => {
-      const existingConnection = currentConnections.find((connection) => connection.provider === provider);
+      const existingConnection = currentConnections.find((connection) => connection.email === email);
 
       if (existingConnection) {
         return currentConnections.map((connection) => (
-          connection.provider === provider
-            ? { ...connection, status: 'Connected' }
+          connection.email === email
+            ? { ...connection, provider, status: 'Connected' }
             : connection
         ));
       }
@@ -261,16 +293,31 @@ function ProfilePage() {
       return [
         ...currentConnections,
         {
-          id: Date.now(),
+          id: `mailbox-${Date.now()}`,
           provider,
-          email: defaultEmail,
+          email,
           status: 'Connected',
+          lastSynced: 'Not synced yet',
         },
       ];
     });
 
-    setSuccessMessage(`${provider} mailbox connected.`);
+    setSuccessMessage(`${provider} mailbox connected for ${email}.`);
     setUploadError('');
+  };
+
+  const handleSyncMailbox = (email) => {
+    setMailboxConnections((currentConnections) => currentConnections.map((connection) => (
+      connection.email === email
+        ? { ...connection, lastSynced: formatMailboxSyncTime() }
+        : connection
+    )));
+    setSuccessMessage(`Mailbox sync requested for ${email}.`);
+    setUploadError('');
+  };
+
+  const scrollToLinkedEmails = () => {
+    linkedEmailsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleAddLinkedEmail = async () => {
@@ -343,6 +390,11 @@ function ProfilePage() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/');
+  };
+
   return (
     <div className="profile-layout">
       <aside className="profile-sidebar">
@@ -393,53 +445,78 @@ function ProfilePage() {
 
         <main className="profile-content">
           <div className="profile-inner">
-            <h1 className="profile-page-title">Profile</h1>
-            <p className="profile-subtitle">
-              Enter your profile manually anytime, and optionally use PDF OCR to pre-fill fields.
-            </p>
+            <div className="profile-page-heading-row">
+              <div>
+                <h1 className="profile-page-title">Profile</h1>
+                <p className="profile-subtitle">
+                  Enter your profile manually anytime, and optionally use document extraction to pre-fill fields.
+                </p>
+              </div>
+              <button
+                className="profile-light-button profile-logout-button"
+                type="button"
+                onClick={handleLogout}
+              >
+                Log Out
+              </button>
+            </div>
 
             {uploadError && <p className="profile-error-message">{uploadError}</p>}
             {successMessage && <p className="profile-success-message">{successMessage}</p>}
             {editing && <p className="profile-editing-message">Editing existing capability profile</p>}
 
             <section className="profile-section-card">
-              <h2 className="profile-section-title">Mailbox Connections</h2>
-              <p className="profile-section-description">
-                Connect Gmail or Outlook mailboxes to pull in opportunity emails and manage mailbox status.
-              </p>
-
-              <div className="profile-button-row">
+              <div className="profile-section-heading-row">
+                <div>
+                  <h2 className="profile-section-title">Mailbox Connections</h2>
+                  <p className="profile-section-description">
+                    Connect Gmail or Outlook mailboxes to pull in opportunity emails and manage connection and sync status beside each email.
+                  </p>
+                </div>
                 <button
                   className="profile-dark-button"
-                  onClick={() => handleConnectMailbox('Gmail')}
+                  type="button"
+                  onClick={scrollToLinkedEmails}
                 >
-                  Connect Gmail
-                </button>
-
-                <button
-                  className="profile-light-button"
-                  onClick={() => handleConnectMailbox('Outlook')}
-                >
-                  Connect Outlook
+                  Add Email
                 </button>
               </div>
 
               <div className="mailbox-list">
-                {mailboxConnections.map((mailbox) => (
-                  <div key={mailbox.id} className="mailbox-card">
+                {mailboxRows.map((mailbox) => (
+                  <div key={mailbox.id} className="mailbox-card mailbox-card-with-actions">
                     <div>
                       <h3 className="mailbox-provider">{mailbox.provider}</h3>
                       <p className="mailbox-email">{mailbox.email}</p>
+                      <p className="mailbox-sync-meta">Last synced: {mailbox.lastSynced || 'Not synced yet'}</p>
                     </div>
-                    <span className={`mailbox-status ${mailbox.status === 'Connected' ? 'mailbox-status-connected' : 'mailbox-status-warning'}`}>
-                      {mailbox.status}
-                    </span>
+                    <div className="mailbox-actions-column">
+                      <div className="mailbox-actions-row">
+                        <button
+                          className="profile-light-button mailbox-action-button"
+                          type="button"
+                          onClick={() => handleConnectMailbox(mailbox.email, mailbox.provider)}
+                        >
+                          Connect
+                        </button>
+                        <button
+                          className="profile-dark-button mailbox-action-button"
+                          type="button"
+                          onClick={() => handleSyncMailbox(mailbox.email)}
+                        >
+                          Sync
+                        </button>
+                      </div>
+                      <span className={`mailbox-status ${mailbox.status === 'Connected' ? 'mailbox-status-connected' : 'mailbox-status-warning'}`}>
+                        {mailbox.status}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             </section>
 
-            <section className="profile-section-card">
+            <section className="profile-section-card" ref={linkedEmailsSectionRef}>
               <h2 className="profile-section-title">Linked Emails</h2>
               <p className="profile-section-description">
                 Add extra inboxes so opportunities can be compiled in one place for your account.
@@ -520,121 +597,51 @@ function ProfilePage() {
             </section>
 
             <section className="profile-section-card">
-              <h2 className="profile-section-title">Capability Profile</h2>
-
+              <h2 className="profile-section-title">Company Information</h2>
               <div className="profile-form-grid">
                 <div className="profile-field">
-                  <label className="profile-label">Company name</label>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="profile-input"
-                  />
+                  <label className="profile-label">Company Name</label>
+                  <input className="profile-input" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
                 </div>
-
-                <div className="profile-field profile-field-full">
-                  <label className="profile-label">Capability summary</label>
-                  <textarea
-                    value={capabilitySummary}
-                    onChange={(e) => setCapabilitySummary(e.target.value)}
-                    className="profile-textarea"
-                    rows="4"
-                  />
-                </div>
-
-                <div className="profile-field profile-field-full">
-                  <label className="profile-label">Core competencies</label>
-                  <textarea
-                    value={coreCompetencies}
-                    onChange={(e) => setCoreCompetencies(e.target.value)}
-                    className="profile-textarea"
-                    rows="3"
-                  />
-                </div>
-
-                <div className="profile-field profile-field-full">
-                  <label className="profile-label">Differentiators</label>
-                  <textarea
-                    value={differentiators}
-                    onChange={(e) => setDifferentiators(e.target.value)}
-                    className="profile-textarea"
-                    rows="3"
-                  />
-                </div>
-
-                <div className="profile-field">
-                  {/* <label className="profile-label">NAICS codes</label> */}
-                  <NaicsMultiSelect
-                    value={naicsCodes}
-                    onChange={setNaicsCodes}
-                  />
-                </div>
-
-                <div className="profile-field profile-field-full">
-                  <label className="profile-label">Certifications</label>
-                  <textarea
-                    value={certifications}
-                    onChange={(e) => setCertifications(e.target.value)}
-                    className="profile-textarea"
-                    rows="3"
-                  />
-                </div>
-
-                <div className="profile-field profile-field-full">
-                  <label className="profile-label">Past performance</label>
-                  <textarea
-                    value={pastPerformance}
-                    onChange={(e) => setPastPerformance(e.target.value)}
-                    className="profile-textarea"
-                    rows="3"
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section className="profile-section-card">
-              <h2 className="profile-section-title">Contact Information</h2>
-
-              <div className="profile-form-grid">
-                <div className="profile-field">
-                  <label className="profile-label">Contact name</label>
-                  <input
-                    type="text"
-                    value={contactName}
-                    onChange={(e) => setContactName(e.target.value)}
-                    className="profile-input"
-                  />
-                </div>
-
-                <div className="profile-field">
-                  <label className="profile-label">Contact email</label>
-                  <input
-                    type="email"
-                    value={contactEmail}
-                    onChange={(e) => setContactEmail(e.target.value)}
-                    className="profile-input"
-                  />
-                </div>
-
-                <div className="profile-field">
-                  <label className="profile-label">Contact phone</label>
-                  <input
-                    type="text"
-                    value={contactPhone}
-                    onChange={(e) => setContactPhone(e.target.value)}
-                    className="profile-input"
-                  />
-                </div>
-
                 <div className="profile-field">
                   <label className="profile-label">Website</label>
-                  <input
-                    type="text"
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                    className="profile-input"
-                  />
+                  <input className="profile-input" value={website} onChange={(e) => setWebsite(e.target.value)} />
+                </div>
+                <div className="profile-field">
+                  <label className="profile-label">Contact Name</label>
+                  <input className="profile-input" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+                </div>
+                <div className="profile-field">
+                  <label className="profile-label">Contact Email</label>
+                  <input className="profile-input" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
+                </div>
+                <div className="profile-field">
+                  <label className="profile-label">Contact Phone</label>
+                  <input className="profile-input" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+                </div>
+                <div className="profile-field profile-field-full">
+                  <label className="profile-label">Capability Summary</label>
+                  <textarea className="profile-textarea" rows="4" value={capabilitySummary} onChange={(e) => setCapabilitySummary(e.target.value)} />
+                </div>
+                <div className="profile-field profile-field-full">
+                  <label className="profile-label">Core Competencies</label>
+                  <textarea className="profile-textarea" rows="4" value={coreCompetencies} onChange={(e) => setCoreCompetencies(e.target.value)} />
+                </div>
+                <div className="profile-field profile-field-full">
+                  <label className="profile-label">Differentiators</label>
+                  <textarea className="profile-textarea" rows="4" value={differentiators} onChange={(e) => setDifferentiators(e.target.value)} />
+                </div>
+                <div className="profile-field profile-field-full">
+                  <label className="profile-label">NAICS Codes</label>
+                  <NaicsMultiSelect value={naicsCodes} onChange={setNaicsCodes} />
+                </div>
+                <div className="profile-field profile-field-full">
+                  <label className="profile-label">Certifications</label>
+                  <textarea className="profile-textarea" rows="3" value={certifications} onChange={(e) => setCertifications(e.target.value)} />
+                </div>
+                <div className="profile-field profile-field-full">
+                  <label className="profile-label">Past Performance</label>
+                  <textarea className="profile-textarea" rows="4" value={pastPerformance} onChange={(e) => setPastPerformance(e.target.value)} />
                 </div>
               </div>
             </section>
@@ -645,8 +652,6 @@ function ProfilePage() {
                 <pre className="profile-structured-data">{extractedText}</pre>
               </section>
             )}
-
-            
           </div>
         </main>
       </div>
@@ -654,33 +659,22 @@ function ProfilePage() {
       {showUploadModal && (
         <div className="profile-modal-overlay">
           <div className="profile-modal">
-            <h2 className="profile-modal-title">Upload Capability Document</h2>
-
+            <h3 className="profile-modal-title">Upload Capability Document</h3>
             <div className="profile-modal-body">
-              <input
-                type="file"
-                accept=".pdf,application/pdf"
-                onChange={handleFileChange}
-              />
-              <p className="profile-modal-file-name">
-                {selectedFile ? selectedFile.name : 'No file selected'}
-              </p>
-              <p className="profile-modal-file-name">Accepted format: PDF</p>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={handleFileChange} />
+              {selectedFile && (
+                <p className="profile-modal-file-name">
+                  Selected: {selectedFile.name}
+                  {!isSupportedDocument(selectedFile) && ' (unsupported file type)'}
+                </p>
+              )}
             </div>
-
             <div className="profile-modal-actions">
-              <button
-                className="profile-dark-button"
-                onClick={handleExtractPrefill}
-                disabled={isUploading}
-              >
-                {isUploading ? 'Extracting...' : 'Extract + Prefill from PDF'}
-              </button>
-              <button
-                className="profile-light-button"
-                onClick={() => setShowUploadModal(false)}
-              >
+              <button className="profile-light-button" type="button" onClick={() => setShowUploadModal(false)}>
                 Cancel
+              </button>
+              <button className="profile-dark-button" type="button" onClick={handleExtractPrefill} disabled={isUploading}>
+                {isUploading ? 'Processing...' : 'Extract and Prefill'}
               </button>
             </div>
           </div>
