@@ -372,7 +372,8 @@
 }
 
 .sync-meta-text,
-.sync-success-text {
+.sync-success-text,
+.sync-notice-text {
     margin: 0;
 }
 
@@ -382,6 +383,11 @@
 
 .sync-success-text {
     color: #166534;
+    font-weight: 600;
+}
+
+.sync-notice-text {
+    color: #92400e;
     font-weight: 600;
 }
 
