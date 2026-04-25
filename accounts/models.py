@@ -7,6 +7,7 @@ from django.contrib.auth.models import (
 from django.db.models.functions import Lower
 
 from django.conf import settings
+from django.core import signing
 
 from contracts.models import NAICSCode
 
@@ -71,6 +72,93 @@ class AdditionalEmail(models.Model):
     def __str__(self):
         return f"{self.user.email} - {self.label}" ## display the email and its label when printed
 
+
+class MailboxConnection(models.Model):
+    class Provider(models.TextChoices):
+        GMAIL = "gmail", "Gmail"
+        OUTLOOK = "outlook", "Outlook"
+
+    class Status(models.TextChoices):
+        CONNECTED = "connected", "Connected"
+        NEEDS_ATTENTION = "needs_attention", "Needs attention"
+        DISCONNECTED = "disconnected", "Disconnected"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mailbox_connections",
+    )
+    additional_email = models.ForeignKey(
+        AdditionalEmail,
+        on_delete=models.SET_NULL,
+        related_name="mailbox_connections",
+        null=True,
+        blank=True,
+    )
+    provider = models.CharField(max_length=20, choices=Provider.choices)
+    mailbox_email = models.EmailField()
+    access_token = models.TextField(blank=True)
+    refresh_token = models.TextField(blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    scope = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.CONNECTED,
+        db_index=True,
+    )
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    sync_cursor = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                "user",
+                "provider",
+                Lower("mailbox_email"),
+                name="unique_mailbox_connection_per_user_provider_email",
+            ),
+        ]
+
+    # Security debt: Django signing prevents silent token tampering but is not
+    # true at-rest encryption. Replace with Fernet/KMS-backed encrypted fields
+    # before storing production mailbox OAuth tokens.
+    TOKEN_SIGNING_SALT = "accounts.mailbox_connection.token"
+
+    def _sign_token(self, raw_token):
+        if not raw_token:
+            return ""
+        return signing.dumps(raw_token, salt=self.TOKEN_SIGNING_SALT)
+
+    def _unsign_token(self, signed_token):
+        if not signed_token:
+            return ""
+        try:
+            return signing.loads(signed_token, salt=self.TOKEN_SIGNING_SALT)
+        except signing.BadSignature:
+            return ""
+
+    def set_access_token(self, raw_token):
+        self.access_token = self._sign_token(raw_token)
+
+    def get_access_token(self):
+        return self._unsign_token(self.access_token)
+
+    def set_refresh_token(self, raw_token):
+        self.refresh_token = self._sign_token(raw_token)
+
+    def get_refresh_token(self):
+        return self._unsign_token(self.refresh_token)
+
+    def set_tokens(self, access_token="", refresh_token=""):
+        self.set_access_token(access_token)
+        self.set_refresh_token(refresh_token)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.get_provider_display()} - {self.mailbox_email}"
+
 class CapabilityProfile(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -105,4 +193,3 @@ class CapabilityProfile(models.Model):
     def __str__(self):
         return self.company_name or f"Capability Profile {self.id}"
     
-

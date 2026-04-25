@@ -15,3 +15,8 @@ class OpportunitySerializer(serializers.Serializer):
     hyperlink = serializers.CharField(allow_blank=True, required=False)
     contract_progress = serializers.CharField(allow_blank=True, required=False)
     workflow_status = serializers.CharField(allow_blank=True, required=False)
+    match_score = serializers.IntegerField(required=False)
+    match_reasons = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )

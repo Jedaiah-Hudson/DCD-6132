@@ -135,6 +135,37 @@ class ContractNotification(models.Model):
     def __str__(self):
         return f"{self.user} - {self.title}"
 
+
+class EmailIngestionMessage(models.Model):
+    mailbox_connection = models.ForeignKey(
+        "accounts.MailboxConnection",
+        on_delete=models.CASCADE,
+        related_name="ingested_messages",
+    )
+    contract = models.ForeignKey(
+        Contract,
+        on_delete=models.SET_NULL,
+        related_name="email_ingestion_messages",
+        null=True,
+        blank=True,
+    )
+    external_message_id = models.CharField(max_length=255)
+    source_email = models.EmailField(blank=True)
+    sender = models.CharField(max_length=255, blank=True)
+    subject = models.CharField(max_length=500, blank=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+    was_candidate = models.BooleanField(default=False)
+    filter_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("mailbox_connection", "external_message_id")
+        ordering = ("-received_at", "-created_at")
+
+    def __str__(self):
+        return f"{self.mailbox_connection.mailbox_email} - {self.external_message_id}"
+
 class ContractNote(models.Model):
     contract = models.ForeignKey(
         Contract,

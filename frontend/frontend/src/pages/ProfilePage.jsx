@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import NaicsMultiSelect from '../components/NaicsMultiSelect';
 import useNotificationSummary from '../hooks/useNotificationSummary';
 
-const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf'];
-const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf'];
+const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
+const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 
 const defaultMailboxConnections = [
   {
@@ -41,12 +41,12 @@ function isAcceptedDocument(file) {
   );
 }
 
-function isPdfDocument(file) {
+function isSupportedDocument(file) {
   if (!file) {
     return false;
   }
 
-  return getFileExtension(file.name) === '.pdf' || file.type === 'application/pdf';
+  return isAcceptedDocument(file);
 }
 
 function inferMailboxProvider(email) {
@@ -193,7 +193,7 @@ function ProfilePage() {
 
     if (file && !isAcceptedDocument(file)) {
       setSelectedFile(null);
-      setUploadError('Please upload a PDF file.');
+      setUploadError('Please upload a PDF, PNG, JPG, or JPEG file.');
       setSuccessMessage('');
       e.target.value = '';
       return;
@@ -206,7 +206,7 @@ function ProfilePage() {
 
   const handleExtractPrefill = async () => {
     if (!selectedFile) {
-      setUploadError('Please choose a PDF file first.');
+      setUploadError('Please choose a PDF, PNG, JPG, or JPEG file first.');
       return;
     }
 
@@ -442,7 +442,7 @@ function ProfilePage() {
           <div className="profile-inner">
             <h1 className="profile-page-title">Profile</h1>
             <p className="profile-subtitle">
-              Enter your profile manually anytime, and optionally use PDF OCR to pre-fill fields.
+              Enter your profile manually anytime, and optionally use document extraction to pre-fill fields.
             </p>
 
             {uploadError && <p className="profile-error-message">{uploadError}</p>}
@@ -645,11 +645,11 @@ function ProfilePage() {
           <div className="profile-modal">
             <h3 className="profile-modal-title">Upload Capability Document</h3>
             <div className="profile-modal-body">
-              <input type="file" accept=".pdf,application/pdf" onChange={handleFileChange} />
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={handleFileChange} />
               {selectedFile && (
                 <p className="profile-modal-file-name">
                   Selected: {selectedFile.name}
-                  {!isPdfDocument(selectedFile) && ' (not a PDF)'}
+                  {!isSupportedDocument(selectedFile) && ' (unsupported file type)'}
                 </p>
               )}
             </div>

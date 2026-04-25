@@ -15,5 +15,8 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(next_page='/accounts/login-vis/'), name='logout_view'),
     path('linked-emails/', views.linked_emails_api, name='linked_emails_api'),
     path('linked-emails/<int:email_id>/', views.linked_email_detail_api, name='linked_email_detail_api'),
+    path('mailbox-connections/', views.mailbox_connections_api, name='mailbox_connections_api'),
+    path('mailbox-connections/sync/', views.mailbox_connections_sync_api, name='mailbox_connections_sync_api'),
+    path('mailbox-connections/<int:connection_id>/sync/', views.mailbox_connection_sync_api, name='mailbox_connection_sync_api'),
     path('naics/', naics_list, name='naics-list'),
 ]

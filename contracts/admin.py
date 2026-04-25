@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Contract, NAICSCode, ContractNote, UserContractProgress
+from .models import Contract, EmailIngestionMessage, NAICSCode, ContractNote, UserContractProgress
 
 
 @admin.register(Contract)
@@ -20,3 +20,9 @@ class NAICSCodeAdmin(admin.ModelAdmin):
 @admin.register(UserContractProgress)
 class UserContractProgressAdmin(admin.ModelAdmin):
     list_display = ("user", "contract", "contract_progress", "updated_at")
+
+
+@admin.register(EmailIngestionMessage)
+class EmailIngestionMessageAdmin(admin.ModelAdmin):
+    list_display = ("mailbox_connection", "contract", "external_message_id", "was_candidate", "received_at")
+    search_fields = ("external_message_id", "sender", "subject", "source_email")
