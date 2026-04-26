@@ -99,6 +99,7 @@ const WORKSPACE_CONFIG = {
     showSummary: true,
     showSync: true,
     allowDismiss: true,
+    dismissLabel: 'Not Interested',
   },
   matchmaking: {
     pageTitle: 'AI Matchmaking',
@@ -114,7 +115,8 @@ const WORKSPACE_CONFIG = {
     overviewTitle: 'Profile-Based Matches',
     overviewText: 'Get matched with the best-fit contracts for your business using your profile and capability statement details.',
     overviewMetricLabel: 'Matched',
-    allowDismiss: false,
+    allowDismiss: true,
+    dismissLabel: 'Not Interested',
   },
   myContracts: {
     pageTitle: 'My Contracts',
@@ -131,6 +133,7 @@ const WORKSPACE_CONFIG = {
     overviewText: 'Contracts land here when you start actively working them, whether that means progress labels or workflow steps.',
     overviewMetricLabel: 'Active',
     allowDismiss: false,
+    dismissLabel: '',
   },
 };
 
@@ -511,6 +514,14 @@ function ContractsDisplayPage({ workspaceType }) {
   };
 
   const handleDismissOpportunity = (opportunityId) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to mark this contract as not interested and remove it from this page? You cannot undo this.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setDismissedOpportunityIds((currentIds) => (
       currentIds.includes(opportunityId)
         ? currentIds
@@ -557,13 +568,6 @@ function ContractsDisplayPage({ workspaceType }) {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <input
-              type="text"
-              placeholder={config.searchPlaceholder}
-              className="search-bar"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
             <div className="topbar-icons">
               <span
                 className="profile-icon-placeholder"
@@ -643,6 +647,21 @@ function ContractsDisplayPage({ workspaceType }) {
                 <div>
                   <h2 className="section-title">{config.sectionTitle}</h2>
                   <p className="section-helper-text">{config.sectionHelperText}</p>
+                </div>
+              </div>
+              <div className="filters-grid">
+                <div className="filter-group filter-group-search">
+                  <label htmlFor="contractsSearch" className="filter-label">
+                    Search
+                  </label>
+                  <input
+                    id="contractsSearch"
+                    type="text"
+                    placeholder={config.searchPlaceholder}
+                    className="search-bar contracts-search-bar"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                  />
                 </div>
                 <div className="filter-group">
                   <label htmlFor="agencyFilter" className="filter-label">
@@ -736,7 +755,7 @@ function ContractsDisplayPage({ workspaceType }) {
                         className="contract-card"
                         data-contract-id={opportunity.id}
                       >
-                        <div className="card-heading-row">
+                        <div className={`card-heading-row ${(hasProgressTag || hasWorkflowTag) ? 'card-heading-row-with-tags' : 'card-heading-row-no-tags'}`}>
                           <div className="card-heading-copy">
                             <div className="title-row">
                               <h3>{opportunity.title}</h3>
@@ -768,7 +787,7 @@ function ContractsDisplayPage({ workspaceType }) {
                               </div>
                             )}
                           </div>
-                          <div className="card-action-stack">
+                          <div className="card-action-row">
                             <button
                               className="note-action-button"
                               type="button"
@@ -782,7 +801,7 @@ function ContractsDisplayPage({ workspaceType }) {
                                 type="button"
                                 onClick={() => handleDismissOpportunity(opportunity.id)}
                               >
-                                Not Interested
+                                {config.dismissLabel}
                               </button>
                             )}
                           </div>
