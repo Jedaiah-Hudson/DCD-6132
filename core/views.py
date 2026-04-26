@@ -13,9 +13,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from rest_framework.views import APIView
-from accounts.models import CapabilityProfile, User
+from accounts.models import CapabilityProfile, MailboxContract, User
 from accounts.profile_options import MATCHMAKING_OPTION_FIELDS
-from contracts.models import Contract, NAICSCode, UserContractProgress
+from contracts.models import Contract, DismissedContract, NAICSCode, UserContractProgress
 from contracts.management.services.naics_utils import get_category_for_naics
 from core.services.capability_extraction import (
     extract_text_from_capability_document,
@@ -463,15 +463,34 @@ class OpportunityListView(APIView):
 
         naics_code = (request.query_params.get('naics_code') or '').strip()
         agency = (request.query_params.get('agency') or '').strip()
+        partner = (request.query_params.get('partner') or '').strip()
         status_value = (request.query_params.get('status') or '').strip()
         search = (request.query_params.get('search') or '').strip()
         match_user = (request.query_params.get('match_user') or '').strip().lower() == 'true'
+
+        if request.user.is_authenticated:
+            mailbox_contract_ids = MailboxContract.objects.filter(
+                user=request.user,
+            ).values_list('contract_id', flat=True)
+            contracts = contracts.filter(
+                Q(source=Contract.SourceType.PROCUREMENT)
+                | Q(id__in=mailbox_contract_ids)
+            )
+            dismissed_contract_ids = DismissedContract.objects.filter(
+                user=request.user,
+            ).values_list('contract_id', flat=True)
+            contracts = contracts.exclude(id__in=dismissed_contract_ids)
+        else:
+            contracts = contracts.filter(source=Contract.SourceType.PROCUREMENT)
 
         if naics_code:
             contracts = contracts.filter(naics_code=naics_code)
 
         if agency:
             contracts = contracts.filter(agency__iexact=agency)
+
+        if partner:
+            contracts = contracts.filter(partner_name__iexact=partner)
 
         if status_value:
             normalized_status = status_value.lower()
@@ -527,7 +546,7 @@ class MatchmakingCacheView(APIView):
         )
 
     def post(self, request):
-        contracts = Contract.objects.all().order_by('deadline', '-created_at')
+        contracts = _visible_contracts_for_user(request.user)
         results = build_match_results_for_user(request, contracts)
         cache = save_matchmaking_cache(request.user, results)
         return Response(
@@ -535,5 +554,150 @@ class MatchmakingCacheView(APIView):
                 'results': results,
                 'match_cache': get_match_cache_metadata(cache),
             },
+            status=status.HTTP_200_OK,
+        )
+
+
+def _build_matched_reasons(contract, profile_naics_map=None, mailbox_reason_map=None):
+    reasons = []
+    profile_naics_map = profile_naics_map or {}
+    mailbox_reason_map = mailbox_reason_map or {}
+
+    naics_title = profile_naics_map.get(contract.naics_code)
+    if contract.naics_code and naics_title is not None:
+        reasons.append(
+            f"NAICS {contract.naics_code} matches your capability profile"
+            + (f" ({naics_title})" if naics_title else "")
+        )
+
+    for matched_terms in mailbox_reason_map.get(contract.id, []):
+        if matched_terms:
+            reasons.append(f"Mailbox keywords matched: {matched_terms}")
+
+    return reasons
+
+
+def _serialize_opportunities_for_user(contracts, user, profile_naics_map=None, include_matched_reasons=False):
+    contract_ids = list(contracts.values_list('id', flat=True))
+    progress_map = {}
+    if user.is_authenticated:
+        progress_map = {
+            progress.contract_id: {
+                'contract_progress': progress.contract_progress,
+                'workflow_status': progress.workflow_status,
+                'relationship_label': progress.relationship_label,
+            }
+            for progress in UserContractProgress.objects.filter(
+                user=user,
+                contract_id__in=contract_ids,
+            )
+        }
+
+    mailbox_reason_map = {}
+    if include_matched_reasons and user.is_authenticated:
+        for item in MailboxContract.objects.filter(
+            user=user,
+            contract_id__in=contract_ids,
+        ).values('contract_id', 'matched_terms'):
+            mailbox_reason_map.setdefault(item['contract_id'], []).append(item['matched_terms'])
+
+    naics_codes = [code for code in contracts.values_list('naics_code', flat=True) if code]
+    naics_category_map = {
+        item['code']: item['broad_category']
+        for item in NAICSCode.objects.filter(code__in=naics_codes).values('code', 'broad_category')
+    }
+
+    opportunities = []
+    for contract in contracts:
+        naics_code_value = contract.naics_code or ''
+        naics_category = (
+            contract.category
+            or naics_category_map.get(naics_code_value)
+            or get_category_for_naics(naics_code_value)
+            or ''
+        )
+
+        opportunities.append(
+            {
+                'id': contract.id,
+                'title': contract.title,
+                'description': contract.summary or '',
+                'naics_code': naics_code_value,
+                'naics_category': naics_category,
+                'agency': contract.agency or '',
+                'status': normalize_contract_status(contract.status),
+                'partner': contract.partner_name or '',
+                'source': contract.source or '',
+                'deadline': contract.deadline,
+                'hyperlink': contract.hyperlink or '',
+                'contract_progress': progress_map.get(contract.id, {}).get(
+                    'contract_progress',
+                    UserContractProgress.ProgressChoices.NONE,
+                ),
+                'workflow_status': progress_map.get(contract.id, {}).get(
+                    'workflow_status',
+                    UserContractProgress.WorkflowChoices.NOT_STARTED,
+                ),
+                'relationship_label': progress_map.get(contract.id, {}).get(
+                    'relationship_label',
+                    UserContractProgress.RelationshipChoices.UNASSIGNED,
+                ),
+            }
+        )
+
+        if include_matched_reasons:
+            opportunities[-1]['matched_reasons'] = _build_matched_reasons(
+                contract,
+                profile_naics_map=profile_naics_map,
+                mailbox_reason_map=mailbox_reason_map,
+            )
+
+    serializer = OpportunitySerializer(opportunities, many=True)
+    return serializer.data
+
+
+def _visible_contracts_for_user(user):
+    contracts = Contract.objects.all().order_by('deadline', '-created_at')
+    mailbox_contract_ids = MailboxContract.objects.filter(
+        user=user,
+    ).values_list('contract_id', flat=True)
+    dismissed_contract_ids = DismissedContract.objects.filter(
+        user=user,
+    ).values_list('contract_id', flat=True)
+
+    return (
+        contracts
+        .filter(
+            Q(source=Contract.SourceType.PROCUREMENT)
+            | Q(id__in=mailbox_contract_ids)
+        )
+        .exclude(id__in=dismissed_contract_ids)
+    )
+
+
+class MatchedContractListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = CapabilityProfile.objects.filter(user=request.user).first()
+        if not profile or not profile.naics_codes.exists():
+            return Response([], status=status.HTTP_200_OK)
+
+        profile_naics_map = {
+            item['code']: item['title']
+            for item in profile.naics_codes.values('code', 'title')
+        }
+        user_naics_codes = list(profile_naics_map.keys())
+        contracts = _visible_contracts_for_user(request.user).filter(
+            naics_code__in=user_naics_codes,
+        )
+
+        return Response(
+            _serialize_opportunities_for_user(
+                contracts,
+                request.user,
+                profile_naics_map=profile_naics_map,
+                include_matched_reasons=True,
+            ),
             status=status.HTTP_200_OK,
         )

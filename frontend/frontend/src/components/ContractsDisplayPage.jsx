@@ -470,21 +470,29 @@ function writeRecentlyViewedContracts(workspaceType, ids) {
 }
 
 async function syncSamOpportunities(limit = 10) {
-  const response = await fetch('http://127.0.0.1:8000/api/sam/sync/', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ limit }),
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 15000);
 
-  const data = await response.json();
+  try {
+    const response = await fetch('http://127.0.0.1:8000/api/sam/sync/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ limit }),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    throw new Error(data.message || 'Sync failed');
+    const data = await readJsonResponse(response, 'Sync failed.');
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Sync failed');
+    }
+
+    return data;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-
-  return data;
 }
 
 async function readJsonResponse(response, fallbackMessage) {
@@ -638,6 +646,7 @@ function ContractsDisplayPage({ workspaceType }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [syncNotice, setSyncNotice] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isGeneratingMatches, setIsGeneratingMatches] = useState(false);
   const [lastSynced, setLastSynced] = useState('Not synced yet');
@@ -709,6 +718,15 @@ function ContractsDisplayPage({ workspaceType }) {
   useEffect(() => {
     writeRecentlyViewedContracts(workspaceType, recentlyViewedIds);
   }, [recentlyViewedIds, workspaceType]);
+
+  useEffect(() => {
+    if (!syncNotice) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => setSyncNotice(''), 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [syncNotice]);
 
   const workspaceOpportunities = useMemo(() => {
     const visibleOpportunities = config.allowDismiss
@@ -898,6 +916,7 @@ function ContractsDisplayPage({ workspaceType }) {
 
     setIsSyncing(true);
     setError('');
+    setSyncNotice('');
 
     try {
       await syncSamOpportunities(10);
@@ -918,11 +937,15 @@ function ContractsDisplayPage({ workspaceType }) {
       }
 
       setLastSynced(formatLastSynced());
+      setSyncNotice('Contracts synced successfully.');
     } catch (fetchError) {
       const isNetworkError = fetchError instanceof TypeError;
+      const isTimeoutError = fetchError.name === 'AbortError';
 
-      setError(
-        isNetworkError
+      setSyncNotice(
+        isTimeoutError
+          ? 'SAM.gov sync is taking too long. Please try again in a minute.'
+          : isNetworkError
           ? 'Could not connect to the server.'
           : fetchError.message || 'Sync failed.',
       );
@@ -1120,7 +1143,9 @@ function ContractsDisplayPage({ workspaceType }) {
 
                 <div className="sync-feedback-row">
                   <p className="sync-meta-text">Last synced: {lastSynced}</p>
-                  {!error && !loading && (
+                  {syncNotice ? (
+                    <p className="sync-notice-text">{syncNotice}</p>
+                  ) : !error && !loading && (
                     <p className="sync-success-text">Showing live backend opportunities.</p>
                   )}
                 </div>

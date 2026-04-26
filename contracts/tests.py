@@ -9,10 +9,10 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
-from accounts.models import User
+from accounts.models import CapabilityProfile, User
 from contracts.management.services.procurement_ingest import normalize_procurement_record
 from contracts.management.services.sam_api import SamApiError, fetch_sam_opportunities
-from contracts.models import Contract, ContractNotification, UserContractProgress
+from contracts.models import Contract, ContractNotification, DismissedContract, NAICSCode, UserContractProgress
 
 
 class ProcurementIngestTests(TestCase):
@@ -179,13 +179,15 @@ class UserContractProgressApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["contract"], self.contract.id)
         self.assertEqual(response.data["contract_progress"], UserContractProgress.ProgressChoices.NONE)
+        self.assertEqual(response.data["pursuit_role"], UserContractProgress.PursuitRoleChoices.UNDECIDED)
         self.assertEqual(response.data["notes"], "")
 
-    def test_update_progress_and_notes(self):
+    def test_update_progress_pursuit_role_and_notes(self):
         response = self.client.patch(
             f"/api/contracts/{self.contract.id}/progress/",
             {
                 "contract_progress": UserContractProgress.ProgressChoices.LOST,
+                "pursuit_role": UserContractProgress.PursuitRoleChoices.SUBCONTRACTING,
                 "notes": "No bid after review.",
             },
             format="json",
@@ -194,7 +196,18 @@ class UserContractProgressApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["contract_progress"], UserContractProgress.ProgressChoices.LOST)
+        self.assertEqual(response.data["pursuit_role"], UserContractProgress.PursuitRoleChoices.SUBCONTRACTING)
         self.assertEqual(response.data["notes"], "No bid after review.")
+
+    def test_invalid_pursuit_role_is_rejected(self):
+        response = self.client.patch(
+            f"/api/contracts/{self.contract.id}/progress/",
+            {"pursuit_role": "VENDOR"},
+            format="json",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_invalid_progress_value_is_rejected(self):
         response = self.client.patch(
@@ -323,3 +336,88 @@ class UserContractProgressApiTests(APITestCase):
         self.assertFalse(
             ContractNotification.objects.filter(id=notification.id).exists()
         )
+
+    def test_dismiss_contract_hides_it_and_clears_user_tracking(self):
+        UserContractProgress.objects.create(
+            user=self.user,
+            contract=self.contract,
+            contract_progress=UserContractProgress.ProgressChoices.PENDING,
+        )
+        ContractNotification.objects.create(
+            user=self.user,
+            contract=self.contract,
+            notification_type=ContractNotification.NotificationType.PROGRESS,
+            severity=ContractNotification.SeverityChoices.INFO,
+            unique_key="manual-dismiss",
+            title="Progress updated",
+            message="You moved Cloud Support to Pending.",
+        )
+
+        response = self.client.delete(
+            f"/api/contracts/{self.contract.id}/dismiss/",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            DismissedContract.objects.filter(user=self.user, contract=self.contract).exists()
+        )
+        self.assertFalse(
+            UserContractProgress.objects.filter(user=self.user, contract=self.contract).exists()
+        )
+        self.assertFalse(
+            ContractNotification.objects.filter(user=self.user, contract=self.contract).exists()
+        )
+
+    def test_dismissed_contract_detail_returns_not_found_for_same_user(self):
+        DismissedContract.objects.create(user=self.user, contract=self.contract)
+
+        response = self.client.get(
+            f"/api/contracts/{self.contract.id}/",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_contract_detail_includes_matched_reasons_for_user_profile(self):
+        naics_code = NAICSCode.objects.create(code="541512", title="Computer Systems Design Services")
+        profile = CapabilityProfile.objects.create(user=self.user, company_name="Profile Co")
+        profile.naics_codes.set([naics_code])
+
+        response = self.client.get(
+            f"/api/contracts/{self.contract.id}/",
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("matched_reasons", response.data["contract"])
+        self.assertTrue(
+            any(
+                "NAICS 541512 matches your capability profile" in reason
+                for reason in response.data["contract"]["matched_reasons"]
+            )
+        )
+
+
+class ContractListApiTests(APITestCase):
+    def test_contract_list_filters_by_partner_case_insensitive(self):
+        Contract.objects.create(
+            source=Contract.SourceType.PROCUREMENT,
+            title="Matched Partner Contract",
+            summary="Matched partner summary.",
+            agency="GSA",
+            partner_name="Northwind Systems",
+        )
+        Contract.objects.create(
+            source=Contract.SourceType.PROCUREMENT,
+            title="Other Partner Contract",
+            summary="Other partner summary.",
+            agency="VA",
+            partner_name="Atlas Facilities",
+        )
+
+        response = self.client.get("/api/contracts/?partner=northwind systems")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.json()["contracts"]), 1)
+        self.assertEqual(response.json()["contracts"][0]["title"], "Matched Partner Contract")

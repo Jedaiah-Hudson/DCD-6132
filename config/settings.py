@@ -163,6 +163,18 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
 
+GMAIL_OAUTH_CONFIG = {
+    'client_id': os.getenv("GOOGLE_CLIENT_ID", ""),
+    'client_secret': os.getenv("GOOGLE_CLIENT_SECRET", ""),
+    'redirect_uri': os.getenv(
+        "GOOGLE_GMAIL_REDIRECT_URI",
+        "http://127.0.0.1:8000/accounts/gmail/callback/",
+    ),
+    'scope': [
+        "https://www.googleapis.com/auth/gmail.readonly",
+    ],
+}
+
 # MSAL Configuration for Outlook OAuth
 MSAL_CONFIG = {
     'client_id': os.getenv("MSAL_CLIENT_ID", ""),

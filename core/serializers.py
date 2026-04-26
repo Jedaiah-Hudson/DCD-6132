@@ -23,6 +23,10 @@ class OpportunitySerializer(serializers.Serializer):
         child=serializers.CharField(),
         required=False,
     )
+    matched_reasons = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )
     match_percentage = serializers.IntegerField(required=False)
     strongest_alignment = serializers.ListField(
         child=serializers.CharField(),

@@ -50,6 +50,13 @@ class UserContractProgress(models.Model):
         DRAFTING = "DRAFTING", "Drafting"
         SUBMITTED = "SUBMITTED", "Submitted"
 
+    class PursuitRoleChoices(models.TextChoices):
+        UNDECIDED = "UNDECIDED", "Undecided"
+        PRIME = "PRIME", "Prime"
+        SUBCONTRACTING = "SUBCONTRACTING", "Subcontracting"
+        TEAMING = "TEAMING", "Teaming"
+        PARTNERSHIP = "PARTNERSHIP", "Partnership"
+
     class RelationshipChoices(models.TextChoices):
         UNASSIGNED = "UNASSIGNED", "Unassigned"
         PRIME = "PRIME", "Prime"
@@ -81,6 +88,11 @@ class UserContractProgress(models.Model):
         choices=WorkflowChoices.choices,
         default="NOT_STARTED"
     )
+    pursuit_role = models.CharField(
+        max_length=20,
+        choices=PursuitRoleChoices.choices,
+        default=PursuitRoleChoices.UNDECIDED,
+    )
 
     relationship_label = models.CharField(
         max_length=20,
@@ -97,6 +109,27 @@ class UserContractProgress(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.contract.title} - {self.contract_progress}"
+
+
+class DismissedContract(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="dismissed_contracts"
+    )
+    contract = models.ForeignKey(
+        Contract,
+        on_delete=models.CASCADE,
+        related_name="dismissals"
+    )
+    reason = models.CharField(max_length=50, default="not_interested")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "contract")
+
+    def __str__(self):
+        return f"{self.user} dismissed {self.contract.title}"
 
 
 class ContractNotification(models.Model):
