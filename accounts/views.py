@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied
@@ -21,16 +21,52 @@ from .serializers import PasswordResetConfirmSerializer
 from .serializers import PasswordResetRequestSerializer
 from .utils import generate_reset_token, get_reset_token_expiration, send_password_reset_email
 from .services import (
+    MailboxSyncError,
     create_or_update_mailbox_connection,
     get_user_mailbox_connection,
     refresh_contracting_opportunities_for_user,
     serialize_mailbox_connection,
+    sync_all_connected_accounts,
+    sync_connected_account,
     sync_mailbox_connection,
 )
 from django.conf import settings
-
+import msal
+import requests
+from urllib.parse import urlencode
+from .models import ConnectedAccount
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from django.core import signing
 
 # Create your views here.
+
+GMAIL_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+GMAIL_TOKEN_URL = 'https://oauth2.googleapis.com/token'
+GMAIL_PROFILE_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/profile'
+GMAIL_STATE_SALT = 'gmail-oauth-state'
+
+
+def _get_gmail_oauth_config():
+    config = settings.GMAIL_OAUTH_CONFIG
+    missing_fields = [
+        field for field in ('client_id', 'client_secret', 'redirect_uri')
+        if not config.get(field)
+    ]
+    if missing_fields:
+        raise ValueError(f"Missing Gmail OAuth setting(s): {', '.join(missing_fields)}")
+    return config
+
+
+def _make_gmail_oauth_state(user):
+    signer = signing.TimestampSigner(salt=GMAIL_STATE_SALT)
+    return signer.sign(str(user.id))
+
+
+def _get_user_from_gmail_oauth_state(state):
+    signer = signing.TimestampSigner(salt=GMAIL_STATE_SALT)
+    user_id = signer.unsign(state, max_age=600)
+    return User.objects.get(id=user_id)
 
 
 # view to login api endpoints
@@ -340,3 +376,258 @@ def naics_list(request):
     naics = NAICSCode.objects.all()
     serializer = NAICSCodeSerializer(naics, many=True)
     return Response(serializer.data)
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def gmail_auth(request):
+    """Start Gmail OAuth authorization and return Google's consent URL."""
+    try:
+        config = _get_gmail_oauth_config()
+    except ValueError as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    params = {
+        'client_id': config['client_id'],
+        'redirect_uri': config['redirect_uri'],
+        'response_type': 'code',
+        'scope': ' '.join(config['scope']),
+        'access_type': 'offline',
+        'include_granted_scopes': 'true',
+        'prompt': 'consent',
+        'state': _make_gmail_oauth_state(request.user),
+    }
+
+    return Response({'auth_url': f"{GMAIL_AUTH_URL}?{urlencode(params)}"}, status=status.HTTP_200_OK)
+
+
+def gmail_callback(request):
+    """Exchange Google's authorization code for tokens and store the Gmail mailbox."""
+    code = request.GET.get('code')
+    state = request.GET.get('state')
+    oauth_error = request.GET.get('error')
+
+    if oauth_error:
+        return JsonResponse({'error': oauth_error}, status=400)
+
+    if not code or not state:
+        return JsonResponse({'error': 'Missing authorization code or state.'}, status=400)
+
+    try:
+        user = _get_user_from_gmail_oauth_state(state)
+        config = _get_gmail_oauth_config()
+    except (signing.BadSignature, signing.SignatureExpired, User.DoesNotExist):
+        return JsonResponse({'error': 'Invalid or expired OAuth state.'}, status=400)
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=500)
+
+    token_response = requests.post(
+        GMAIL_TOKEN_URL,
+        data={
+            'code': code,
+            'client_id': config['client_id'],
+            'client_secret': config['client_secret'],
+            'redirect_uri': config['redirect_uri'],
+            'grant_type': 'authorization_code',
+        },
+        timeout=30,
+    )
+
+    if token_response.status_code != 200:
+        return JsonResponse({'error': 'Failed to exchange Gmail authorization code.'}, status=400)
+
+    token_data = token_response.json()
+    access_token = token_data.get('access_token')
+    refresh_token = token_data.get('refresh_token')
+
+    if not access_token:
+        return JsonResponse({'error': 'Google did not return an access token.'}, status=400)
+
+    profile_response = requests.get(
+        GMAIL_PROFILE_URL,
+        headers={'Authorization': f'Bearer {access_token}'},
+        timeout=30,
+    )
+
+    if profile_response.status_code != 200:
+        return JsonResponse({'error': 'Failed to fetch Gmail mailbox profile.'}, status=400)
+
+    gmail_address = (profile_response.json().get('emailAddress') or '').strip().lower()
+    if not gmail_address:
+        return JsonResponse({'error': 'Google did not return a Gmail address.'}, status=400)
+
+    existing_account = ConnectedAccount.objects.filter(
+        user=user,
+        email__iexact=gmail_address,
+    ).first()
+    saved_refresh_token = refresh_token or (existing_account.refresh_token if existing_account else None)
+
+    if not saved_refresh_token:
+        return JsonResponse(
+            {'error': 'Google did not return a refresh token. Reconnect Gmail and approve offline access.'},
+            status=400,
+        )
+
+    account, _created = ConnectedAccount.objects.update_or_create(
+        user=user,
+        email=gmail_address,
+        defaults={
+            'provider': 'gmail',
+            'access_token': access_token,
+            'refresh_token': saved_refresh_token,
+            'token_expiry': timezone.now() + timezone.timedelta(seconds=token_data.get('expires_in', 3600)),
+            'is_active': True,
+        },
+    )
+
+    return redirect(f"{settings.FRONTEND_BASE_URL}/profile?gmail=connected&account={account.id}")
+
+
+@api_view(['GET'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def connected_accounts_api(request):
+    accounts = ConnectedAccount.objects.filter(user=request.user).order_by('provider', 'email')
+    return Response(
+        {
+            'mailboxes': [
+                {
+                    'id': account.id,
+                    'provider': account.provider,
+                    'email': account.email,
+                    'is_active': account.is_active,
+                    'last_synced_at': account.last_synced_at.isoformat() if account.last_synced_at else None,
+                    'status': 'Connected' if account.is_active else 'Needs attention',
+                }
+                for account in accounts
+            ],
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@login_required
+def outlook_auth(request):
+    """Start the Outlook OAuth authorization flow."""
+    client = msal.ConfidentialClientApplication(
+        settings.MSAL_CONFIG['client_id'],
+        authority=settings.MSAL_CONFIG['authority'],
+        client_credential=settings.MSAL_CONFIG['client_secret']
+    )
+    auth_url = client.get_authorization_request_url(
+        settings.MSAL_CONFIG['scope'],
+        redirect_uri=settings.MSAL_CONFIG['redirect_uri']
+    )
+    return JsonResponse({'auth_url': auth_url})  # Frontend can redirect to this URL
+
+@login_required
+def outlook_callback(request):
+    """Handle the OAuth callback, exchange code for tokens, and store in ConnectedAccount."""
+    code = request.GET.get('code')
+    if not code:
+        return JsonResponse({'error': 'No authorization code provided'}, status=400)
+
+    client = msal.ConfidentialClientApplication(
+        settings.MSAL_CONFIG['client_id'],
+        authority=settings.MSAL_CONFIG['authority'],
+        client_credential=settings.MSAL_CONFIG['client_secret']
+    )
+
+    # Exchange code for tokens
+    result = client.acquire_token_by_authorization_code(
+        code,
+        scopes=settings.MSAL_CONFIG['scope'],
+        redirect_uri=settings.MSAL_CONFIG['redirect_uri']
+    )
+
+    if 'access_token' not in result:
+        return JsonResponse({'error': 'Failed to acquire token'}, status=400)
+
+    # Get user email from Graph (requires User.Read scope)
+    import requests
+    headers = {'Authorization': f'Bearer {result["access_token"]}'}
+    user_response = requests.get('https://graph.microsoft.com/v1.0/me', headers=headers)
+    if user_response.status_code != 200:
+        return JsonResponse({'error': 'Failed to fetch user info'}, status=400)
+    user_email = user_response.json().get('mail') or user_response.json().get('userPrincipalName')
+
+    # Store in ConnectedAccount
+    account, created = ConnectedAccount.objects.update_or_create(
+        user=request.user,
+        email=user_email,
+        defaults={
+            'provider': 'outlook',
+            'access_token': result['access_token'],
+            'refresh_token': result.get('refresh_token'),
+            'token_expiry': timezone.now() + timezone.timedelta(seconds=result.get('expires_in', 3600)),
+            'is_active': True,
+        }
+    )
+
+    return redirect('/dashboard/')  # Redirect to a success page, e.g., dashboard
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def sync_mailbox(request, account_id):
+    try:
+        account = ConnectedAccount.objects.get(pk=account_id, user=request.user)
+    except ConnectedAccount.DoesNotExist:
+        return Response({'success': False, 'error': 'Mailbox not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    limit = _parse_sync_limit(request.data.get('limit', 25))
+    try:
+        result = sync_connected_account(account, limit=limit)
+    except MailboxSyncError as exc:
+        return Response(
+            {
+                'success': False,
+                'error': str(exc),
+                'mailbox': {
+                    'id': account.id,
+                    'provider': account.provider,
+                    'email': account.email,
+                    'last_synced_at': account.last_synced_at.isoformat() if account.last_synced_at else None,
+                },
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response({'success': True, 'mailbox': result}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def sync_all_mailboxes(request):
+    limit = _parse_sync_limit(request.data.get('limit', 25))
+    synced = []
+    failed = []
+
+    for account in request.user.connected_accounts.filter(is_active=True).order_by('id'):
+        try:
+            synced.append(sync_connected_account(account, limit=limit))
+        except MailboxSyncError as exc:
+            failed.append({
+                'id': account.id,
+                'provider': account.provider,
+                'email': account.email,
+                'error': str(exc),
+                'last_synced_at': account.last_synced_at.isoformat() if account.last_synced_at else None,
+            })
+
+    return Response({
+        'success': len(failed) == 0,
+        'synced_count': len(synced),
+        'failed_count': len(failed),
+        'mailboxes': synced,
+        'failed_mailboxes': failed,
+    }, status=status.HTTP_200_OK)
+
+
+def _parse_sync_limit(value):
+    try:
+        return max(1, min(int(value), 100))
+    except (TypeError, ValueError):
+        return 25

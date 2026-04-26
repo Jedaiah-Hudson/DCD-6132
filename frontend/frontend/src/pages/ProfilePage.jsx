@@ -6,6 +6,8 @@ import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
 const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
+const GMAIL_AUTH_API_URL = 'http://127.0.0.1:8000/accounts/gmail/auth/';
+const CONNECTED_ACCOUNTS_API_URL = 'http://127.0.0.1:8000/accounts/connected-accounts/';
 
 const defaultMailboxConnections = [
   {
@@ -65,6 +67,19 @@ function formatMailboxSyncTime() {
   });
 }
 
+function formatMailboxLastSynced(value) {
+  if (!value) {
+    return 'Not synced yet';
+  }
+
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function ProfilePage() {
   const navigate = useNavigate();
   const [companyName, setCompanyName] = useState('');
@@ -89,6 +104,8 @@ function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [extractedText, setExtractedText] = useState('');
   const [mailboxConnections, setMailboxConnections] = useState(defaultMailboxConnections);
+  const [syncingMailboxIds, setSyncingMailboxIds] = useState([]);
+  const [isSyncingAllMailboxes, setIsSyncingAllMailboxes] = useState(false);
   const linkedEmailsSectionRef = useRef(null);
   const [linkedEmails, setLinkedEmails] = useState([]);
   const [linkedEmailInput, setLinkedEmailInput] = useState('');
@@ -109,7 +126,7 @@ function ProfilePage() {
     }));
 
     const rowMap = new Map();
-    [...defaultMailboxConnections, ...dynamicMailboxRows, ...mailboxConnections].forEach((row) => {
+    [...dynamicMailboxRows, ...mailboxConnections].forEach((row) => {
       rowMap.set(row.email, row);
     });
 
@@ -152,7 +169,7 @@ function ProfilePage() {
         const headers = {
           Authorization: `Token ${token}`,
         };
-        const [profileResponse, linkedEmailsResponse] = await Promise.all([
+        const [profileResponse, linkedEmailsResponse, connectedAccountsResponse] = await Promise.all([
           fetch('http://127.0.0.1:8000/api/profile/', {
             method: 'GET',
             headers,
@@ -161,10 +178,15 @@ function ProfilePage() {
             method: 'GET',
             headers,
           }),
+          fetch(CONNECTED_ACCOUNTS_API_URL, {
+            method: 'GET',
+            headers,
+          }),
         ]);
 
         const profileData = await profileResponse.json();
         const linkedEmailsData = await linkedEmailsResponse.json();
+        const connectedAccountsData = await connectedAccountsResponse.json();
 
         if (!profileResponse.ok) {
           setUploadError(profileData.message || 'Failed to load profile.');
@@ -176,10 +198,23 @@ function ProfilePage() {
           return;
         }
 
+        if (!connectedAccountsResponse.ok) {
+          setUploadError(connectedAccountsData.error || 'Failed to load mailbox connections.');
+          return;
+        }
+
         fillProfileFields(profileData.profile || profileData || {});
         setEditing(Boolean(profileData.editing));
         setLastProcessedFile(profileData.processed_file_name || 'None');
         setLinkedEmails(linkedEmailsData.emails || []);
+        setMailboxConnections((connectedAccountsData.mailboxes || []).map((mailbox) => ({
+          id: `connected-${mailbox.id}`,
+          accountId: mailbox.id,
+          provider: mailbox.provider === 'gmail' ? 'Gmail' : 'Outlook',
+          email: mailbox.email,
+          status: mailbox.status || (mailbox.is_active ? 'Connected' : 'Needs attention'),
+          lastSynced: formatMailboxLastSynced(mailbox.last_synced_at),
+        })));
       } catch (error) {
         setUploadError('Could not load saved profile.');
       }
@@ -278,7 +313,33 @@ function ProfilePage() {
     }
   };
 
-  const handleConnectMailbox = (email, provider) => {
+  const handleConnectMailbox = async (email, provider) => {
+    if (provider === 'Gmail') {
+      if (!token) {
+        setUploadError('Please log in before connecting Gmail.');
+        return;
+      }
+
+      try {
+        const response = await fetch(GMAIL_AUTH_API_URL, {
+          headers: {
+            Authorization: `Token ${token}`,
+          },
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setUploadError(data.error || 'Failed to start Gmail authorization.');
+          return;
+        }
+
+        window.location.href = data.auth_url;
+      } catch {
+        setUploadError('Could not connect to the server.');
+      }
+      return;
+    }
+
     setMailboxConnections((currentConnections) => {
       const existingConnection = currentConnections.find((connection) => connection.email === email);
 
@@ -306,14 +367,86 @@ function ProfilePage() {
     setUploadError('');
   };
 
-  const handleSyncMailbox = (email) => {
-    setMailboxConnections((currentConnections) => currentConnections.map((connection) => (
-      connection.email === email
-        ? { ...connection, lastSynced: formatMailboxSyncTime() }
-        : connection
-    )));
-    setSuccessMessage(`Mailbox sync requested for ${email}.`);
+  const updateSyncedMailboxRows = (mailboxes) => {
+    setMailboxConnections((currentConnections) => currentConnections.map((connection) => {
+      const syncedMailbox = mailboxes.find((mailbox) => mailbox.id === connection.accountId);
+      if (!syncedMailbox) {
+        return connection;
+      }
+
+      return {
+        ...connection,
+        lastSynced: formatMailboxLastSynced(syncedMailbox.last_synced_at),
+        status: 'Connected',
+      };
+    }));
+  };
+
+  const handleSyncMailbox = async (mailbox) => {
+    if (!mailbox.accountId) {
+      setUploadError('Connect this mailbox before syncing.');
+      return;
+    }
+
+    setSyncingMailboxIds((currentIds) => [...currentIds, mailbox.accountId]);
     setUploadError('');
+
+    try {
+      const response = await fetch(`${CONNECTED_ACCOUNTS_API_URL}${mailbox.accountId}/sync/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ limit: 25 }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setUploadError(data.error || 'Mailbox sync failed.');
+        return;
+      }
+
+      updateSyncedMailboxRows([data.mailbox]);
+      setSuccessMessage(`Mailbox sync completed for ${mailbox.email}.`);
+    } catch {
+      setUploadError('Could not connect to the server.');
+    } finally {
+      setSyncingMailboxIds((currentIds) => currentIds.filter((id) => id !== mailbox.accountId));
+    }
+  };
+
+  const handleSyncAllMailboxes = async () => {
+    setIsSyncingAllMailboxes(true);
+    setUploadError('');
+
+    try {
+      const response = await fetch(`${CONNECTED_ACCOUNTS_API_URL}sync-all/`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ limit: 25 }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setUploadError(data.error || 'Mailbox sync failed.');
+        return;
+      }
+
+      updateSyncedMailboxRows(data.mailboxes || []);
+      if (data.success) {
+        setSuccessMessage(`Synced ${data.synced_count} mailbox${data.synced_count === 1 ? '' : 'es'}.`);
+      } else {
+        setUploadError(`Synced ${data.synced_count} mailbox${data.synced_count === 1 ? '' : 'es'}; ${data.failed_count} failed.`);
+      }
+    } catch {
+      setUploadError('Could not connect to the server.');
+    } finally {
+      setIsSyncingAllMailboxes(false);
+    }
   };
 
   const scrollToLinkedEmails = () => {
@@ -457,13 +590,23 @@ function ProfilePage() {
                     Connect Gmail or Outlook mailboxes to pull in opportunity emails and manage connection and sync status beside each email.
                   </p>
                 </div>
-                <button
-                  className="profile-dark-button"
-                  type="button"
-                  onClick={scrollToLinkedEmails}
-                >
-                  Add Email
-                </button>
+                <div className="mailbox-actions-row">
+                  <button
+                    className="profile-light-button"
+                    type="button"
+                    onClick={scrollToLinkedEmails}
+                  >
+                    Add Email
+                  </button>
+                  <button
+                    className="profile-dark-button"
+                    type="button"
+                    onClick={handleSyncAllMailboxes}
+                    disabled={isSyncingAllMailboxes}
+                  >
+                    {isSyncingAllMailboxes ? 'Syncing...' : 'Sync All'}
+                  </button>
+                </div>
               </div>
 
               <div className="mailbox-list">
@@ -486,9 +629,10 @@ function ProfilePage() {
                         <button
                           className="profile-dark-button mailbox-action-button"
                           type="button"
-                          onClick={() => handleSyncMailbox(mailbox.email)}
+                          onClick={() => handleSyncMailbox(mailbox)}
+                          disabled={!mailbox.accountId || syncingMailboxIds.includes(mailbox.accountId)}
                         >
-                          Sync
+                          {syncingMailboxIds.includes(mailbox.accountId) ? 'Syncing...' : 'Sync'}
                         </button>
                       </div>
                       <span className={`mailbox-status ${mailbox.status === 'Connected' ? 'mailbox-status-connected' : 'mailbox-status-warning'}`}>

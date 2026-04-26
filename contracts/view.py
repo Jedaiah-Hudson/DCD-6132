@@ -2,7 +2,8 @@ from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from contracts.management.services.naics_utils import get_category_for_naics
-from contracts.models import Contract, ContractNotification, UserContractProgress
+from contracts.models import Contract, ContractNotification, DismissedContract, UserContractProgress
+from accounts.models import CapabilityProfile, MailboxContract
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -49,6 +50,10 @@ def contract_list(request):
     if source:
         contracts = contracts.filter(source=source)
 
+    partner = (request.GET.get("partner") or "").strip()
+    if partner:
+        contracts = contracts.filter(partner_name__iexact=partner)
+
     data = []
 
     for contract in contracts:
@@ -76,8 +81,29 @@ def contract_list(request):
     return JsonResponse({"contracts": data})
 
 
-def _serialize_contract(contract):
-    return {
+def _build_contract_matched_reasons(contract, user):
+    reasons = []
+
+    profile = CapabilityProfile.objects.filter(user=user).first()
+    if profile and contract.naics_code:
+        matching_naics = profile.naics_codes.filter(code=contract.naics_code).first()
+        if matching_naics:
+            reasons.append(
+                f"NAICS {matching_naics.code} matches your capability profile ({matching_naics.title})"
+            )
+
+    mailbox_matches = MailboxContract.objects.filter(
+        user=user,
+        contract=contract,
+    ).exclude(matched_terms="")
+    for match in mailbox_matches:
+        reasons.append(f"Mailbox keywords matched: {match.matched_terms}")
+
+    return reasons
+
+
+def _serialize_contract(contract, user=None):
+    data = {
         "id": contract.id,
         "source": contract.source,
         "procurement_portal": contract.procurement_portal,
@@ -94,6 +120,9 @@ def _serialize_contract(contract):
         "created_at": contract.created_at.isoformat() if contract.created_at else None,
         "updated_at": contract.updated_at.isoformat() if contract.updated_at else None,
     }
+    if user and user.is_authenticated:
+        data["matched_reasons"] = _build_contract_matched_reasons(contract, user)
+    return data
 
 from django.http import JsonResponse
 from .models import Contract
@@ -117,9 +146,6 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .models import Contract
-from accounts.models import CapabilityProfile
-
-
 DEADLINE_NOTIFICATION_THRESHOLDS = [
     (14, "2 weeks", ContractNotification.SeverityChoices.LOW),
     (7, "1 week", ContractNotification.SeverityChoices.MEDIUM),
@@ -305,8 +331,35 @@ def contract_progress_summary(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def contract_detail(request, contract_id):
+    contract = get_object_or_404(
+        Contract.objects.exclude(dismissals__user=request.user),
+        id=contract_id,
+    )
+    return Response({"contract": _serialize_contract(contract, request.user)}, status=status.HTTP_200_OK)
+
+
+@api_view(["DELETE", "POST"])
+@permission_classes([IsAuthenticated])
+def dismiss_contract(request, contract_id):
     contract = get_object_or_404(Contract, id=contract_id)
-    return Response({"contract": _serialize_contract(contract)}, status=status.HTTP_200_OK)
+    reason = (request.data.get("reason") or "not_interested").strip() or "not_interested"
+
+    DismissedContract.objects.get_or_create(
+        user=request.user,
+        contract=contract,
+        defaults={"reason": reason},
+    )
+
+    UserContractProgress.objects.filter(user=request.user, contract=contract).delete()
+    ContractNotification.objects.filter(user=request.user, contract=contract).delete()
+
+    return Response(
+        {
+            "detail": "Contract removed from your recommendations.",
+            "contract_id": contract.id,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(["GET"])

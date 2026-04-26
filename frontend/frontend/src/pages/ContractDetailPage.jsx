@@ -17,6 +17,13 @@ const WORKFLOW_OPTIONS = [
   { value: 'DRAFTING', label: 'Drafting' },
   { value: 'SUBMITTED', label: 'Submitted' },
 ];
+const PURSUIT_ROLE_OPTIONS = [
+  { value: 'UNDECIDED', label: 'Undecided' },
+  { value: 'PRIME', label: 'Prime' },
+  { value: 'SUBCONTRACTING', label: 'Subcontracting' },
+  { value: 'TEAMING', label: 'Teaming' },
+  { value: 'PARTNERSHIP', label: 'Partnership' },
+];
 const PROGRESS_STATUS_COLORS = {
   NONE: 'gray',
   PENDING: 'amber',
@@ -104,6 +111,7 @@ function ContractDetailPage() {
   const [contract, setContract] = useState(null);
   const [contractProgress, setContractProgress] = useState('NONE');
   const [workflowStatus, setWorkflowStatus] = useState('NOT_STARTED');
+  const [pursuitRole, setPursuitRole] = useState('UNDECIDED');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -143,6 +151,7 @@ function ContractDetailPage() {
         setContract(contractData.contract);
         setContractProgress(progressData.contract_progress || 'NONE');
         setWorkflowStatus(progressData.workflow_status || 'NOT_STARTED');
+        setPursuitRole(progressData.pursuit_role || 'UNDECIDED');
         setNotes(progressData.notes || '');
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
@@ -175,6 +184,7 @@ function ContractDetailPage() {
         body: JSON.stringify({
           contract_progress: contractProgress,
           workflow_status: workflowStatus,
+          pursuit_role: pursuitRole,
           notes,
         }),
       });
@@ -187,6 +197,7 @@ function ContractDetailPage() {
 
       setContractProgress(data.contract_progress || 'NONE');
       setWorkflowStatus(data.workflow_status || 'NOT_STARTED');
+      setPursuitRole(data.pursuit_role || 'UNDECIDED');
       setNotes(data.notes || '');
       setSuccessMessage('Progress saved.');
     } catch (saveError) {
@@ -306,6 +317,17 @@ function ContractDetailPage() {
                     <p>{contract.summary || 'No summary available.'}</p>
                   </div>
 
+                  {contract.matched_reasons?.length > 0 && (
+                    <div className="detail-summary">
+                      <span className="detail-label">Matched reasons</span>
+                      <ul className="matched-reasons-list">
+                        {contract.matched_reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {contract.hyperlink && (
                     <a className="detail-link" href={contract.hyperlink} target="_blank" rel="noreferrer">
                       Open source listing
@@ -352,6 +374,22 @@ function ContractDetailPage() {
                   <span className={getWorkflowBadgeClass(workflowStatus)}>
                     {WORKFLOW_OPTIONS.find((option) => option.value === workflowStatus)?.label || workflowStatus}
                   </span>
+
+                  <label className="status-label" htmlFor="pursuitRole">
+                    Pursuit role
+                  </label>
+                  <select
+                    id="pursuitRole"
+                    className="status-select detail-workflow-select"
+                    value={pursuitRole}
+                    onChange={(event) => setPursuitRole(event.target.value)}
+                  >
+                    {PURSUIT_ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
 
                   <label className="status-label" htmlFor="contractNotes">
                     Notes

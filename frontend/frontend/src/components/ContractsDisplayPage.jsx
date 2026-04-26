@@ -4,7 +4,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
+const MATCHED_CONTRACTS_API_URL = 'http://127.0.0.1:8000/api/matched-contracts/';
 const PROGRESS_SUMMARY_API_URL = 'http://127.0.0.1:8000/api/contract-progress/summary/';
+const CONTRACTS_API_URL = 'http://127.0.0.1:8000/api/contracts/';
 const LISTING_STATUS_COLORS = {
   active: 'green',
   inactive: 'gray',
@@ -85,7 +87,6 @@ const NAICS_CATEGORY_COLORS = {
   research_development: 'purple',
   other: 'gray',
 };
-const DISMISSED_STORAGE_KEY = 'dismissedDashboardOpportunities';
 const WORKSPACE_CONFIG = {
   dashboard: {
     pageTitle: 'Dashboard',
@@ -99,6 +100,7 @@ const WORKSPACE_CONFIG = {
     showSummary: true,
     showSync: true,
     allowDismiss: true,
+    dismissLabel: 'Not Interested',
   },
   matchmaking: {
     pageTitle: 'AI Matchmaking',
@@ -114,7 +116,8 @@ const WORKSPACE_CONFIG = {
     overviewTitle: 'Profile-Based Matches',
     overviewText: 'Get matched with the best-fit contracts for your business using your profile and capability statement details.',
     overviewMetricLabel: 'Matched',
-    allowDismiss: false,
+    allowDismiss: true,
+    dismissLabel: 'Not Interested',
   },
   myContracts: {
     pageTitle: 'My Contracts',
@@ -130,7 +133,8 @@ const WORKSPACE_CONFIG = {
     overviewTitle: 'Current Workboard',
     overviewText: 'Contracts land here when you start actively working them, whether that means progress labels or workflow steps.',
     overviewMetricLabel: 'Active',
-    allowDismiss: false,
+    allowDismiss: true,
+    dismissLabel: 'Delete',
   },
 };
 
@@ -184,20 +188,6 @@ function formatLastSynced() {
   });
 }
 
-function readDismissedOpportunities() {
-  try {
-    const storedValue = window.localStorage.getItem(DISMISSED_STORAGE_KEY);
-    const parsedValue = JSON.parse(storedValue || '[]');
-    return Array.isArray(parsedValue) ? parsedValue : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeDismissedOpportunities(ids) {
-  window.localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(ids));
-}
-
 async function syncSamOpportunities(limit = 10) {
   const response = await fetch('http://127.0.0.1:8000/api/sam/sync/', {
     method: 'POST',
@@ -216,13 +206,37 @@ async function syncSamOpportunities(limit = 10) {
   return data;
 }
 
+async function dismissContract(contractId, token) {
+  if (!token) {
+    throw new Error('Please log in to remove contracts.');
+  }
+
+  const response = await fetch(`${CONTRACTS_API_URL}${contractId}/dismiss/`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Token ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ reason: 'not_interested' }),
+  });
+
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to remove contract.');
+  }
+
+  return data;
+}
+
 async function fetchOpportunities(signal, token, { matchUser = false } = {}) {
   const headers = token ? { Authorization: `Token ${token}` } : {};
-  const url = new URL(OPPORTUNITIES_API_URL);
-
-  if (matchUser) {
-    url.searchParams.set('match_user', 'true');
-  }
+  const url = new URL(matchUser ? MATCHED_CONTRACTS_API_URL : OPPORTUNITIES_API_URL);
 
   const response = await fetch(url, { signal, headers });
 
@@ -289,7 +303,7 @@ function ContractsDisplayPage({ workspaceType }) {
   const [selectedAgency, setSelectedAgency] = useState(restoreWorkspaceState?.selectedAgency || '');
   const [selectedPartner, setSelectedPartner] = useState(restoreWorkspaceState?.selectedPartner || '');
   const [selectedStatus, setSelectedStatus] = useState(restoreWorkspaceState?.selectedStatus || '');
-  const [dismissedOpportunityIds, setDismissedOpportunityIds] = useState(() => readDismissedOpportunities());
+  const [dismissingOpportunityIds, setDismissingOpportunityIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -348,21 +362,17 @@ function ContractsDisplayPage({ workspaceType }) {
     return () => controller.abort();
   }, [config.showSummary, token, workspaceType]);
 
-  useEffect(() => {
-    writeDismissedOpportunities(dismissedOpportunityIds);
-  }, [dismissedOpportunityIds]);
-
   const workspaceOpportunities = useMemo(() => {
-    const visibleOpportunities = config.allowDismiss
-      ? allOpportunities.filter((opportunity) => !dismissedOpportunityIds.includes(opportunity.id))
-      : allOpportunities;
+    const visibleOpportunities = allOpportunities.filter(
+      (opportunity) => !dismissingOpportunityIds.includes(opportunity.id)
+    );
 
     if (workspaceType === 'myContracts') {
       return visibleOpportunities.filter(isTrackedContract);
     }
 
     return visibleOpportunities;
-  }, [allOpportunities, config.allowDismiss, dismissedOpportunityIds, workspaceType]);
+  }, [allOpportunities, dismissingOpportunityIds, workspaceType]);
 
   const agencyOptions = useMemo(() => Array.from(
     new Set(
@@ -510,12 +520,32 @@ function ContractsDisplayPage({ workspaceType }) {
     }
   };
 
-  const handleDismissOpportunity = (opportunityId) => {
-    setDismissedOpportunityIds((currentIds) => (
-      currentIds.includes(opportunityId)
-        ? currentIds
-        : [...currentIds, opportunityId]
+  const handleDismissOpportunity = async (opportunityId) => {
+    if (dismissingOpportunityIds.includes(opportunityId)) {
+      return;
+    }
+
+    setError('');
+    setDismissingOpportunityIds((currentIds) => (
+      currentIds.includes(opportunityId) ? currentIds : [...currentIds, opportunityId]
     ));
+
+    try {
+      await dismissContract(opportunityId, token);
+      setAllOpportunities((currentOpportunities) => (
+        currentOpportunities.filter((opportunity) => opportunity.id !== opportunityId)
+      ));
+
+      if (config.showSummary) {
+        const summary = await fetchProgressSummary(undefined, token);
+        setProgressSummary(summary);
+      }
+    } catch (dismissError) {
+      setDismissingOpportunityIds((currentIds) => (
+        currentIds.filter((currentId) => currentId !== opportunityId)
+      ));
+      setError(dismissError.message || 'Failed to remove contract.');
+    }
   };
 
   return (
@@ -729,6 +759,7 @@ function ContractsDisplayPage({ workspaceType }) {
                   {filteredOpportunities.map((opportunity) => {
                     const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
                     const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
+                    const isDismissing = dismissingOpportunityIds.includes(opportunity.id);
 
                     return (
                       <div
@@ -767,6 +798,15 @@ function ContractsDisplayPage({ workspaceType }) {
                                 )}
                               </div>
                             )}
+                            {workspaceType === 'matchmaking' && opportunity.matched_reasons?.length > 0 && (
+                              <div className="tracking-tag-row">
+                                {opportunity.matched_reasons.slice(0, 2).map((reason) => (
+                                  <span className="status-tag status-color-blue" key={reason}>
+                                    {reason}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <div className="card-action-stack">
                             <button
@@ -781,8 +821,9 @@ function ContractsDisplayPage({ workspaceType }) {
                                 className="note-secondary-button"
                                 type="button"
                                 onClick={() => handleDismissOpportunity(opportunity.id)}
+                                disabled={isDismissing}
                               >
-                                Not Interested
+                                {isDismissing ? 'Removing...' : config.dismissLabel}
                               </button>
                             )}
                           </div>

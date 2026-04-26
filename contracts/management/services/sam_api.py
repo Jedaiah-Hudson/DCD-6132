@@ -1,7 +1,13 @@
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 from contracts.management.services.procurement_ingest import ingest_procurement_record
+
+BASE_DIR = Path(__file__).resolve().parents[3]
+load_dotenv(BASE_DIR / ".env")
 
 SAM_OPPORTUNITIES_URL = "https://api.sam.gov/prod/opportunities/v2/search"
 
@@ -114,6 +120,8 @@ def ingest_sam_opportunities(
     offset=0,
 ):
     total_ingested = 0
+    count_created = 0
+    count_updated = 0
     batch_size = 2
 
     results = []
@@ -145,11 +153,16 @@ def ingest_sam_opportunities(
 
         for record in records:
             contract, created = ingest_procurement_record(record, "sam")
+            if created:
+                count_created += 1
+            else:
+                count_updated += 1
 
             results.append({
                 "id": contract.id,
                 "title": contract.title,
                 "source": contract.source,
+                "agency": contract.agency,
                 "created": created,
             })
 
@@ -164,6 +177,8 @@ def ingest_sam_opportunities(
 
     return {
         "count_ingested": total_ingested,
+        "count_created": count_created,
+        "count_updated": count_updated,
         "results": results,
         "raw_total_records": raw_total_records,
     }

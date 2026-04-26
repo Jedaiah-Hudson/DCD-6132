@@ -20,3 +20,7 @@ class OpportunitySerializer(serializers.Serializer):
         child=serializers.CharField(),
         required=False,
     )
+    matched_reasons = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )

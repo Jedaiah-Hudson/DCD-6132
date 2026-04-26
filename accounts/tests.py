@@ -4,8 +4,12 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
-from accounts.models import AdditionalEmail, MailboxConnection, User
+from django.core import signing
+from django.test import override_settings
+
+from accounts.models import AdditionalEmail, ConnectedAccount, MailboxConnection, MailboxContract, User
 from accounts.services import refresh_contracting_opportunities_for_user
 from contracts.management.services.email_filters import classify_contract_email
 from contracts.management.services.email_parser import parse_contract_from_email
@@ -130,6 +134,388 @@ class LinkedEmailApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['emails']), 1)
         self.assertEqual(response.data['emails'][0]['email'], 'mine@example.com')
+
+
+@override_settings(
+    GMAIL_OAUTH_CONFIG={
+        'client_id': 'google-client-id',
+        'client_secret': 'google-client-secret',
+        'redirect_uri': 'http://127.0.0.1:8000/accounts/gmail/callback/',
+        'scope': ['https://www.googleapis.com/auth/gmail.readonly'],
+    },
+    FRONTEND_BASE_URL='http://localhost:5173',
+)
+class GmailOAuthApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='gmail-owner@example.com',
+            password='StrongPass123!',
+        )
+        self.token = Token.objects.create(user=self.user)
+        self.auth_headers = {'HTTP_AUTHORIZATION': f'Token {self.token.key}'}
+
+    def test_gmail_auth_starts_flow_with_offline_access(self):
+        response = self.client.get('/accounts/gmail/auth/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        auth_url = response.data['auth_url']
+        parsed_url = urlparse(auth_url)
+        params = parse_qs(parsed_url.query)
+
+        self.assertEqual(parsed_url.netloc, 'accounts.google.com')
+        self.assertEqual(params['client_id'], ['google-client-id'])
+        self.assertEqual(params['redirect_uri'], ['http://127.0.0.1:8000/accounts/gmail/callback/'])
+        self.assertEqual(params['response_type'], ['code'])
+        self.assertEqual(params['access_type'], ['offline'])
+        self.assertEqual(params['prompt'], ['consent'])
+        self.assertEqual(params['include_granted_scopes'], ['true'])
+        self.assertIn('https://www.googleapis.com/auth/gmail.readonly', params['scope'][0])
+        self.assertIn('state', params)
+
+    @patch('accounts.views.requests.get')
+    @patch('accounts.views.requests.post')
+    def test_gmail_callback_exchanges_code_and_saves_connected_account(self, mock_post, mock_get):
+        signer = signing.TimestampSigner(salt='gmail-oauth-state')
+        oauth_state = signer.sign(str(self.user.id))
+
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {
+            'access_token': 'access-token-value',
+            'refresh_token': 'refresh-token-value',
+            'expires_in': 3600,
+        }
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            'emailAddress': 'ConnectedUser@Gmail.com',
+        }
+
+        response = self.client.get(
+            '/accounts/gmail/callback/',
+            {'code': 'auth-code', 'state': oauth_state},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith('http://localhost:5173/profile?gmail=connected'))
+
+        account = ConnectedAccount.objects.get(user=self.user, email='connecteduser@gmail.com')
+        self.assertEqual(account.provider, 'gmail')
+        self.assertEqual(account.access_token, 'access-token-value')
+        self.assertEqual(account.refresh_token, 'refresh-token-value')
+        self.assertTrue(account.is_active)
+
+        mock_post.assert_called_once()
+        token_request = mock_post.call_args.kwargs['data']
+        self.assertEqual(token_request['code'], 'auth-code')
+        self.assertEqual(token_request['client_id'], 'google-client-id')
+        self.assertEqual(token_request['client_secret'], 'google-client-secret')
+        self.assertEqual(token_request['grant_type'], 'authorization_code')
+
+    def test_gmail_callback_rejects_invalid_state(self):
+        response = self.client.get(
+            '/accounts/gmail/callback/',
+            {'code': 'auth-code', 'state': 'bad-state'},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ConnectedAccount.objects.exists())
+
+
+class ConnectedAccountSyncServiceTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='sync-owner@example.com',
+            password='StrongPass123!',
+        )
+        self.other_user = User.objects.create_user(
+            email='sync-other@example.com',
+            password='StrongPass123!',
+        )
+        self.token = Token.objects.create(user=self.user)
+        self.auth_headers = {'HTTP_AUTHORIZATION': f'Token {self.token.key}'}
+
+    def _connected_account(self, provider, email):
+        return ConnectedAccount.objects.create(
+            user=self.user,
+            provider=provider,
+            email=email,
+            access_token=f'{provider}-access-token',
+            refresh_token=f'{provider}-refresh-token',
+            token_expiry=timezone.now() + timezone.timedelta(hours=1),
+            is_active=True,
+        )
+
+    @patch('accounts.services.requests.request')
+    def test_sync_selected_gmail_mailbox_reads_contract_messages(self, mock_request):
+        account = self._connected_account('gmail', 'gmailbox@example.com')
+
+        def response_for(method, url, **kwargs):
+            response = type('Response', (), {})()
+            response.status_code = 200
+            if url.endswith('/messages'):
+                response.json = lambda: {'messages': [{'id': 'gmail-message-1'}]}
+                return response
+            response.json = lambda: {
+                'id': 'gmail-message-1',
+                'snippet': 'Attached is the RFP package for this contract opportunity.',
+                'payload': {
+                    'headers': [
+                        {'name': 'Subject', 'value': 'New RFP contract opportunity'},
+                        {'name': 'From', 'value': 'Buyer <buyer@example.gov>'},
+                        {'name': 'Date', 'value': 'Fri, 24 Apr 2026 10:00:00 +0000'},
+                    ],
+                    'body': {},
+                },
+            }
+            return response
+
+        mock_request.side_effect = response_for
+
+        response = self.client.post(
+            f'/accounts/connected-accounts/{account.id}/sync/',
+            {'limit': 1},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mailbox']['matched_count'], 1)
+        contract = Contract.objects.get(title='New RFP contract opportunity')
+        self.assertEqual(contract.source, Contract.SourceType.GMAIL)
+        self.assertTrue(
+            MailboxContract.objects.filter(
+                user=self.user,
+                connected_account=account,
+                contract=contract,
+                provider_message_id='gmail-message-1',
+            ).exists()
+        )
+
+    @patch('accounts.services.requests.request')
+    def test_sync_selected_outlook_mailbox_reads_contract_messages(self, mock_request):
+        account = self._connected_account('outlook', 'outlookbox@example.com')
+        response_payload = type('Response', (), {})()
+        response_payload.status_code = 200
+        response_payload.json = lambda: {
+            'value': [
+                {
+                    'id': 'outlook-message-1',
+                    'subject': 'Solicitation for proposal support',
+                    'bodyPreview': 'Please review this procurement bid opportunity.',
+                    'receivedDateTime': '2026-04-24T10:00:00Z',
+                    'from': {'emailAddress': {'address': 'buyer@example.gov'}},
+                    'webLink': 'https://outlook.office.com/mail/item/outlook-message-1',
+                }
+            ]
+        }
+        mock_request.return_value = response_payload
+
+        response = self.client.post(
+            f'/accounts/connected-accounts/{account.id}/sync/',
+            {'limit': 1},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mailbox']['matched_count'], 1)
+        contract = Contract.objects.get(title='Solicitation for proposal support')
+        self.assertEqual(contract.source, Contract.SourceType.OUTLOOK)
+        self.assertTrue(
+            MailboxContract.objects.filter(
+                user=self.user,
+                connected_account=account,
+                contract=contract,
+                provider_message_id='outlook-message-1',
+            ).exists()
+        )
+
+    @patch('accounts.services.requests.request')
+    def test_sync_all_mailboxes_runs_only_current_users_connected_accounts(self, mock_request):
+        gmail_account = self._connected_account('gmail', 'gmailbox@example.com')
+        outlook_account = self._connected_account('outlook', 'outlookbox@example.com')
+        ConnectedAccount.objects.create(
+            user=self.other_user,
+            provider='gmail',
+            email='other-gmailbox@example.com',
+            access_token='other-token',
+            refresh_token='other-refresh-token',
+            token_expiry=timezone.now() + timezone.timedelta(hours=1),
+            is_active=True,
+        )
+
+        def response_for(method, url, **kwargs):
+            response = type('Response', (), {})()
+            response.status_code = 200
+            if 'gmail.googleapis.com' in url and url.endswith('/messages'):
+                response.json = lambda: {'messages': [{'id': 'gmail-message-all'}]}
+                return response
+            if 'gmail.googleapis.com' in url:
+                response.json = lambda: {
+                    'id': 'gmail-message-all',
+                    'snippet': 'Contract bid details',
+                    'payload': {
+                        'headers': [
+                            {'name': 'Subject', 'value': 'Gmail contract bid'},
+                            {'name': 'From', 'value': 'buyer@example.gov'},
+                        ],
+                    },
+                }
+                return response
+
+            response.json = lambda: {
+                'value': [
+                    {
+                        'id': 'outlook-message-all',
+                        'subject': 'Outlook RFP notice',
+                        'bodyPreview': 'Proposal opportunity details',
+                        'from': {'emailAddress': {'address': 'buyer@example.gov'}},
+                        'webLink': 'https://outlook.office.com/mail/item/outlook-message-all',
+                    }
+                ]
+            }
+            return response
+
+        mock_request.side_effect = response_for
+
+        response = self.client.post(
+            '/accounts/connected-accounts/sync-all/',
+            {'limit': 1},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['synced_count'], 2)
+        self.assertEqual(
+            set(MailboxContract.objects.values_list('connected_account_id', flat=True)),
+            {gmail_account.id, outlook_account.id},
+        )
+
+    def test_email_contracts_are_visible_only_to_associated_user(self):
+        account = self._connected_account('gmail', 'gmailbox@example.com')
+        contract = Contract.objects.create(
+            source=Contract.SourceType.GMAIL,
+            title='Private mailbox RFP',
+            summary='Contract opportunity from email.',
+            agency='buyer@example.gov',
+            status='Email Lead',
+        )
+        MailboxContract.objects.create(
+            user=self.user,
+            connected_account=account,
+            contract=contract,
+            provider_message_id='private-message',
+            matched_terms='rfp, contract',
+        )
+
+        owner_response = self.client.get('/api/opportunities/', **self.auth_headers)
+        other_token = Token.objects.create(user=self.other_user)
+        other_response = self.client.get(
+            '/api/opportunities/',
+            HTTP_AUTHORIZATION=f'Token {other_token.key}',
+        )
+        anonymous_response = self.client.get('/api/opportunities/')
+
+        self.assertTrue(any(item['id'] == contract.id for item in owner_response.data))
+        self.assertFalse(any(item['id'] == contract.id for item in other_response.data))
+        self.assertFalse(any(item['id'] == contract.id for item in anonymous_response.data))
+
+    def test_connected_accounts_list_returns_current_users_mailboxes(self):
+        account = self._connected_account('gmail', 'gmailbox@example.com')
+        ConnectedAccount.objects.create(
+            user=self.other_user,
+            provider='outlook',
+            email='other@example.com',
+            access_token='other-token',
+            refresh_token='other-refresh-token',
+            token_expiry=timezone.now() + timezone.timedelta(hours=1),
+            is_active=True,
+        )
+
+        response = self.client.get('/accounts/connected-accounts/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['mailboxes']), 1)
+        self.assertEqual(response.data['mailboxes'][0]['id'], account.id)
+        self.assertEqual(response.data['mailboxes'][0]['email'], 'gmailbox@example.com')
+
+    @patch('accounts.services.requests.request')
+    def test_sync_selected_mailbox_updates_last_sync_timestamp(self, mock_request):
+        account = self._connected_account('outlook', 'outlookbox@example.com')
+        response_payload = type('Response', (), {})()
+        response_payload.status_code = 200
+        response_payload.json = lambda: {'value': []}
+        mock_request.return_value = response_payload
+
+        response = self.client.post(
+            f'/accounts/connected-accounts/{account.id}/sync/',
+            {'limit': 1},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['success'])
+        account.refresh_from_db()
+        self.assertIsNotNone(account.last_synced_at)
+        self.assertEqual(response.data['mailbox']['last_synced_at'], account.last_synced_at.isoformat())
+
+    @patch('accounts.views.sync_connected_account')
+    def test_sync_selected_mailbox_returns_failure_response(self, mock_sync):
+        from accounts.services import MailboxSyncError
+
+        account = self._connected_account('gmail', 'gmailbox@example.com')
+        mock_sync.side_effect = MailboxSyncError('Provider token expired.')
+
+        response = self.client.post(
+            f'/accounts/connected-accounts/{account.id}/sync/',
+            {'limit': 1},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data['success'])
+        self.assertEqual(response.data['error'], 'Provider token expired.')
+        account.refresh_from_db()
+        self.assertIsNone(account.last_synced_at)
+
+    @patch('accounts.views.sync_connected_account')
+    def test_sync_all_mailboxes_returns_partial_failure_response(self, mock_sync):
+        from accounts.services import MailboxSyncError
+
+        gmail_account = self._connected_account('gmail', 'gmailbox@example.com')
+        outlook_account = self._connected_account('outlook', 'outlookbox@example.com')
+
+        def sync_result(account, limit=25):
+            if account.id == gmail_account.id:
+                return {
+                    'id': account.id,
+                    'provider': account.provider,
+                    'email': account.email,
+                    'last_synced_at': timezone.now().isoformat(),
+                    'created_count': 0,
+                    'updated_count': 0,
+                    'matched_count': 0,
+                    'contracts': [],
+                }
+            raise MailboxSyncError('Outlook provider failed.')
+
+        mock_sync.side_effect = sync_result
+
+        response = self.client.post(
+            '/accounts/connected-accounts/sync-all/',
+            {'limit': 1},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['success'])
+        self.assertEqual(response.data['synced_count'], 1)
+        self.assertEqual(response.data['failed_count'], 1)
+        self.assertEqual(response.data['mailboxes'][0]['id'], gmail_account.id)
+        self.assertEqual(response.data['failed_mailboxes'][0]['id'], outlook_account.id)
 
 
 class AuthApiTests(APITestCase):

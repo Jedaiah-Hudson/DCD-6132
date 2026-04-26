@@ -13,7 +13,7 @@ from core.services.capability_extraction import (
     parse_capability_text,
 )
 from core.services.matchmaking import get_matched_contracts_for_user, get_user_matchmaking_profile
-from contracts.models import Contract, NAICSCode
+from contracts.models import Contract, DismissedContract, NAICSCode
 
 
 class ProfileAccessTests(TestCase):
@@ -544,6 +544,14 @@ class OpportunityApiTests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['partner'], 'Northwind Systems')
 
+    def test_filter_by_partner_case_insensitive(self):
+        response = self.client.get('/api/opportunities/?partner=skyline tech')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['title'], 'Cloud Engineering Contract')
+        self.assertEqual(response.data[0]['partner'], 'Skyline Tech')
+
     def test_match_user_filters_by_capability_profile_naics_codes(self):
         naics_code = NAICSCode.objects.create(code='541330', title='Engineering Services')
         profile = CapabilityProfile.objects.create(
@@ -559,6 +567,17 @@ class OpportunityApiTests(APITestCase):
         self.assertTrue(all(item['naics_code'] == '541330' for item in response.data))
         self.assertTrue(all(item['match_score'] > 0 for item in response.data))
         self.assertTrue(all(item['match_reasons'] for item in response.data))
+
+    def test_authenticated_opportunities_exclude_dismissed_contracts(self):
+        dismissed_contract = Contract.objects.get(title='Cybersecurity Support Services')
+        DismissedContract.objects.create(user=self.user, contract=dismissed_contract)
+
+        response = self.client.get('/api/opportunities/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            any(item['id'] == dismissed_contract.id for item in response.data)
+        )
 
     def test_match_user_requires_authentication(self):
         response = self.client.get('/api/opportunities/?match_user=true')
@@ -651,6 +670,44 @@ class OpportunityApiTests(APITestCase):
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]['contract'].title, 'Cloud Engineering Contract')
         self.assertGreater(matches[0]['match_score'], 0)
+
+    def test_matched_contracts_endpoint_returns_profile_matches(self):
+        naics_code = NAICSCode.objects.create(code='541330', title='Engineering Services')
+        profile = CapabilityProfile.objects.create(
+            user=self.user,
+            company_name='Match Co',
+        )
+        profile.naics_codes.set([naics_code])
+
+        response = self.client.get('/api/matched-contracts/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 2)
+        self.assertTrue(all(item['naics_code'] == '541330' for item in response.data))
+        self.assertIn('matched_reasons', response.data[0])
+        self.assertTrue(
+            any('NAICS 541330 matches your capability profile' in reason for reason in response.data[0]['matched_reasons'])
+        )
+
+    def test_matched_contracts_endpoint_requires_authentication(self):
+        response = self.client.get('/api/matched-contracts/')
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_matched_contracts_endpoint_excludes_dismissed_contracts(self):
+        naics_code = NAICSCode.objects.create(code='541330', title='Engineering Services')
+        profile = CapabilityProfile.objects.create(
+            user=self.user,
+            company_name='Match Co',
+        )
+        profile.naics_codes.set([naics_code])
+        dismissed_contract = Contract.objects.get(title='Cybersecurity Support Services')
+        DismissedContract.objects.create(user=self.user, contract=dismissed_contract)
+
+        response = self.client.get('/api/matched-contracts/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(any(item['id'] == dismissed_contract.id for item in response.data))
 
     def test_opportunity_api_ignores_legacy_core_opportunity_rows(self):
         Opportunity.objects.create(

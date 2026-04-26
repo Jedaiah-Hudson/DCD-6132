@@ -30,10 +30,17 @@ python manage.py runserver
 
 SAM.gov sync setup
 
-- Set `SAM_API_KEY` before running the ingest command or using the dashboard sync button.
+- Put `SAM_API_KEY=your_sam_api_key_here` in the repo-root `.env` file before running the ingest command or using the dashboard sync button.
 - Example ingest command:
-python manage.py ingest_sam_opportunities --limit 5
+`.venv/bin/python manage.py ingest_sam_opportunities --limit 5`
 - Opportunities are saved into the `contracts_contract` table and served by `/api/opportunities/`.
+
+Gmail OAuth mailbox setup
+
+- Put `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_GMAIL_REDIRECT_URI` in the repo-root `.env` file.
+- The default local redirect URI is `http://127.0.0.1:8000/accounts/gmail/callback/`.
+- Add that exact redirect URI to your Google Cloud OAuth web client.
+- Gmail connections are saved in the `accounts_connectedaccount` table with provider `gmail`.
 
 
 
@@ -54,6 +61,4 @@ Notes:
 - This project uses a custom user model: `AUTH_USER_MODEL = 'accounts.User'`.
 - `DB_PASSWORD` must be set or Django will raise a startup configuration error.
 - A sample env file is provided at `.env.example`.
-
-
 

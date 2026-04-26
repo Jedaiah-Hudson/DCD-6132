@@ -9,7 +9,7 @@ from django.db.models.functions import Lower
 from django.conf import settings
 from django.core import signing
 
-from contracts.models import NAICSCode
+from contracts.models import Contract, NAICSCode
 
 
 class UserManager(BaseUserManager):
@@ -192,4 +192,54 @@ class CapabilityProfile(models.Model):
     ocr_extracted_text = models.TextField(blank=True, default='')
     def __str__(self):
         return self.company_name or f"Capability Profile {self.id}"
-    
+
+
+class ConnectedAccount(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='connected_accounts'
+    )
+    provider = models.CharField(max_length=50)  # e.g., 'gmail', 'outlook'
+    email = models.EmailField()
+    access_token = models.TextField()
+    refresh_token = models.TextField(blank=True, null=True)
+    token_expiry = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    last_synced_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'email')  # Ensure one account per user-email combo
+
+    def __str__(self):
+        return f"{self.user.email} - {self.provider} ({self.email})"
+
+
+class MailboxContract(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='mailbox_contracts'
+    )
+    connected_account = models.ForeignKey(
+        ConnectedAccount,
+        on_delete=models.CASCADE,
+        related_name='mailbox_contracts'
+    )
+    contract = models.ForeignKey(
+        Contract,
+        on_delete=models.CASCADE,
+        related_name='mailbox_matches'
+    )
+    provider_message_id = models.CharField(max_length=255)
+    matched_terms = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('connected_account', 'provider_message_id')
+
+    def __str__(self):
+        return f"{self.connected_account.email} -> {self.contract.title}"

@@ -19,4 +19,11 @@ urlpatterns = [
     path('mailbox-connections/sync/', views.mailbox_connections_sync_api, name='mailbox_connections_sync_api'),
     path('mailbox-connections/<int:connection_id>/sync/', views.mailbox_connection_sync_api, name='mailbox_connection_sync_api'),
     path('naics/', naics_list, name='naics-list'),
+    path('gmail/auth/', views.gmail_auth, name='gmail_auth'),
+    path('gmail/callback/', views.gmail_callback, name='gmail_callback'),
+    path('outlook/auth/', views.outlook_auth, name='outlook_auth'),
+    path('outlook/callback/', views.outlook_callback, name='outlook_callback'),
+    path('connected-accounts/', views.connected_accounts_api, name='connected_accounts_api'),
+    path('connected-accounts/<int:account_id>/sync/', views.sync_mailbox, name='sync_mailbox'),
+    path('connected-accounts/sync-all/', views.sync_all_mailboxes, name='sync_all_mailboxes'),
 ]
