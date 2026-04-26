@@ -90,6 +90,12 @@ class LinkedEmailApiTests(APITestCase):
 
     def test_remove_linked_email_success(self):
         linked_email = AdditionalEmail.objects.create(user=self.user, email='rm@example.com')
+        MailboxConnection.objects.create(
+            user=self.user,
+            additional_email=linked_email,
+            provider=MailboxConnection.Provider.GMAIL,
+            mailbox_email='rm@example.com',
+        )
 
         with patch('accounts.views.refresh_contracting_opportunities_for_user') as mock_refresh:
             with self.captureOnCommitCallbacks(execute=True):
@@ -103,6 +109,7 @@ class LinkedEmailApiTests(APITestCase):
         self.assertEqual(response.data['removed_id'], linked_email.id)
         self.assertTrue(response.data['opportunities_refreshed'])
         self.assertFalse(AdditionalEmail.objects.filter(id=linked_email.id).exists())
+        self.assertFalse(MailboxConnection.objects.filter(mailbox_email='rm@example.com').exists())
         mock_refresh.assert_called_once()
         self.assertEqual(mock_refresh.call_args[0][0].id, self.user.id)
 
@@ -235,6 +242,37 @@ class MailboxConnectionApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_mailbox_connection_success(self):
+        connection = MailboxConnection.objects.create(
+            user=self.user,
+            provider=MailboxConnection.Provider.GMAIL,
+            mailbox_email='contracts@example.com',
+        )
+
+        response = self.client.delete(
+            f'/accounts/mailbox-connections/{connection.id}/',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['removed_id'], connection.id)
+        self.assertFalse(MailboxConnection.objects.filter(id=connection.id).exists())
+
+    def test_delete_mailbox_connection_rejects_other_users_connection(self):
+        other_connection = MailboxConnection.objects.create(
+            user=self.other_user,
+            provider=MailboxConnection.Provider.GMAIL,
+            mailbox_email='other-contracts@example.com',
+        )
+
+        response = self.client.delete(
+            f'/accounts/mailbox-connections/{other_connection.id}/',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(MailboxConnection.objects.filter(id=other_connection.id).exists())
 
 
 class EmailFilterParserTests(TestCase):
