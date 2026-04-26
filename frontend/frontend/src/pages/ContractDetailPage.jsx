@@ -236,9 +236,6 @@ function ContractDetailPage() {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <button className="notes-cancel-button" onClick={handleBackToContracts}>
-              {backButtonLabel}
-            </button>
             <div className="topbar-icons">
               <span
                 className="profile-icon-placeholder"
@@ -260,11 +257,17 @@ function ContractDetailPage() {
               <div className="state-card state-card-error">{error}</div>
             ) : (
               <>
-                <h1 className="page-title">{contract.title}</h1>
-
                 {error && <div className="state-card state-card-error detail-message">{error}</div>}
 
                 <section className="section detail-section">
+                  <button
+                    className="notes-cancel-button detail-back-button"
+                    type="button"
+                    onClick={handleBackToContracts}
+                  >
+                    {backButtonLabel}
+                  </button>
+                  <h1 className="page-title detail-page-title">{contract.title}</h1>
                   <h2 className="section-title">Contract Details</h2>
                   <div className="detail-grid">
                     <div>

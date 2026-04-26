@@ -270,6 +270,7 @@ def linked_email_detail_api(request, email_id):
         return Response({'error': 'Linked email not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     user = request.user
+    request.user.mailbox_connections.filter(additional_email=linked_email).delete()
     linked_email.delete()
     transaction.on_commit(lambda: refresh_contracting_opportunities_for_user(user))
     return Response(
@@ -321,6 +322,25 @@ def mailbox_connection_sync_api(request, connection_id):
 
     result = sync_mailbox_connection(connection)
     return Response({'message': 'Mailbox sync completed.', 'result': result}, status=status.HTTP_200_OK)
+
+
+@api_view(['DELETE'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mailbox_connection_detail_api(request, connection_id):
+    try:
+        connection = get_user_mailbox_connection(request.user, connection_id)
+    except PermissionDenied as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+    connection.delete()
+    return Response(
+        {
+            'message': 'Mailbox connection removed successfully.',
+            'removed_id': connection_id,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 @api_view(['POST'])
