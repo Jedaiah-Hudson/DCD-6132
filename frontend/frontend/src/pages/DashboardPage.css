@@ -163,6 +163,12 @@
     color: var(--pinkstem-text);
 }
 
+.workspace-quick-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin: -8px 0 26px;
+}
+
 .section {
     margin-bottom: 36px;
 }
@@ -263,7 +269,9 @@
 
 .sync-button,
 .note-action-button,
-.notes-save-button {
+.notes-save-button,
+.jump-section-button,
+.history-action-button {
     background: linear-gradient(135deg, var(--pinkstem-accent), var(--pinkstem-accent-strong));
     color: #ffffff;
     border: none;
@@ -276,13 +284,33 @@
 
 .sync-button:hover,
 .note-action-button:hover,
-.notes-save-button:hover {
+.notes-save-button:hover,
+.jump-section-button:hover,
+.history-action-button:hover {
     filter: brightness(0.97);
 }
 
 .sync-button:disabled {
     cursor: default;
     opacity: 0.7;
+}
+
+.jump-section-button:disabled {
+    cursor: default;
+    opacity: 0.6;
+    box-shadow: none;
+}
+
+.jump-section-button-secondary {
+    background: #ffffff;
+    color: var(--pinkstem-text);
+    border: 1px solid var(--pinkstem-border);
+    box-shadow: none;
+}
+
+.jump-section-button-secondary:hover {
+    filter: none;
+    background-color: var(--pinkstem-accent-faint);
 }
 
 .sync-feedback-row {
@@ -748,10 +776,21 @@
     text-align: left;
     padding: 18px 24px;
     border-bottom: 1px solid #d9d9d9;
+    vertical-align: middle;
 }
 
 .history-table tbody tr:last-child td {
     border-bottom: none;
+}
+
+.recent-section-heading-row {
+    align-items: flex-end;
+}
+
+.history-action-button {
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    box-shadow: none;
 }
 
 .contract-card,
@@ -799,6 +838,10 @@
     .workspace-overview-metric {
         text-align: left;
     }
+
+    .workspace-quick-actions {
+        justify-content: flex-start;
+    }
 }
 
 @media (max-width: 720px) {
@@ -829,6 +872,10 @@
 
     .progress-summary-section {
         grid-template-columns: 1fr;
+    }
+
+    .workspace-quick-actions {
+        margin-top: 0;
     }
 }
 
