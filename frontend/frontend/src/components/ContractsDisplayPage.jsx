@@ -4,9 +4,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
-const MATCHED_CONTRACTS_API_URL = 'http://127.0.0.1:8000/api/matched-contracts/';
 const PROGRESS_SUMMARY_API_URL = 'http://127.0.0.1:8000/api/contract-progress/summary/';
-const CONTRACTS_API_URL = 'http://127.0.0.1:8000/api/contracts/';
+const MATCHES_API_URL = 'http://127.0.0.1:8000/api/matches/';
+
 const LISTING_STATUS_COLORS = {
   active: 'green',
   inactive: 'gray',
@@ -15,30 +15,53 @@ const LISTING_STATUS_COLORS = {
   drafting: 'blue',
   submitted: 'green',
 };
+
 const PROGRESS_STATUS_COLORS = {
   NONE: 'gray',
   PENDING: 'amber',
   WON: 'green',
   LOST: 'red',
 };
+
 const WORKFLOW_STATUS_COLORS = {
   NOT_STARTED: 'gray',
   REVIEWING: 'amber',
   DRAFTING: 'blue',
   SUBMITTED: 'green',
 };
+
+const RELATIONSHIP_LABEL_COLORS = {
+  UNASSIGNED: 'gray',
+  PRIME: 'green',
+  SUBCONTRACTOR: 'blue',
+  TEAMING: 'purple',
+  VENDOR: 'amber',
+  CONSULTANT: 'teal',
+};
+
 const PROGRESS_STATUS_LABELS = {
   NONE: 'Not tracked',
   PENDING: 'Pending',
   WON: 'Won',
   LOST: 'Lost',
 };
+
 const WORKFLOW_STATUS_LABELS = {
   NOT_STARTED: 'Not Started',
   REVIEWING: 'Reviewing',
   DRAFTING: 'Drafting',
   SUBMITTED: 'Submitted',
 };
+
+const RELATIONSHIP_LABELS = {
+  UNASSIGNED: 'Unassigned',
+  PRIME: 'Prime',
+  SUBCONTRACTOR: 'Sub',
+  TEAMING: 'Teaming',
+  VENDOR: 'Vendor',
+  CONSULTANT: 'Consultant',
+};
+
 const NAICS_CATEGORY_COLORS = {
   agriculture: 'green',
   mining_energy: 'amber',
@@ -87,18 +110,58 @@ const NAICS_CATEGORY_COLORS = {
   research_development: 'purple',
   other: 'gray',
 };
+
+const DISMISSED_STORAGE_KEY = 'dismissedDashboardOpportunities';
+const RECENTLY_VIEWED_STORAGE_KEY = 'recentlyViewedContractsByWorkspace';
+const MAX_RECENTLY_VIEWED = 8;
+const CONTRACTS_PER_PAGE = 10;
+const MATCH_ANIMATION_DURATION_MS = 1100;
+const MATCH_TIERS = [
+  {
+    key: 'very-poor',
+    max: 15,
+    label: 'VERY POOR MATCH',
+  },
+  {
+    key: 'poor',
+    max: 30,
+    label: 'POOR MATCH',
+  },
+  {
+    key: 'fair',
+    max: 50,
+    label: 'FAIR MATCH',
+  },
+  {
+    key: 'good',
+    max: 70,
+    label: 'GOOD MATCH',
+  },
+  {
+    key: 'strong',
+    max: 85,
+    label: 'STRONG MATCH',
+  },
+  {
+    key: 'excellent',
+    max: 100,
+    label: 'EXCELLENT MATCH',
+  },
+];
+
 const WORKSPACE_CONFIG = {
   dashboard: {
     pageTitle: 'Dashboard',
     searchPlaceholder: 'Search opportunities...',
     sectionTitle: 'Explore Contracts',
     sectionHelperText: 'Filter live opportunities by agency, partner, status, NAICS code, and search terms.',
-    recentTitle: 'Recent Opportunities',
+    recentTitle: 'Recently Visited',
     emptyMessage: 'No opportunities match the selected filters.',
     loadingMessage: 'Loading opportunities from the backend...',
     activeNav: 'dashboard',
     showSummary: true,
     showSync: true,
+    showRecentVisits: true,
     allowDismiss: true,
     dismissLabel: 'Not Interested',
   },
@@ -113,6 +176,7 @@ const WORKSPACE_CONFIG = {
     activeNav: 'matchmaking',
     showSummary: false,
     showSync: false,
+    showRecentVisits: false,
     overviewTitle: 'Profile-Based Matches',
     overviewText: 'Get matched with the best-fit contracts for your business using your profile and capability statement details.',
     overviewMetricLabel: 'Matched',
@@ -130,11 +194,12 @@ const WORKSPACE_CONFIG = {
     activeNav: 'my-contracts',
     showSummary: false,
     showSync: false,
+    showRecentVisits: false,
     overviewTitle: 'Current Workboard',
     overviewText: 'Contracts land here when you start actively working them, whether that means progress labels or workflow steps.',
     overviewMetricLabel: 'Active',
-    allowDismiss: true,
-    dismissLabel: 'Delete',
+    allowDismiss: false,
+    dismissLabel: '',
   },
 };
 
@@ -162,6 +227,12 @@ function getWorkflowStatusClass(status) {
   return `status-tag status-color-${colorName}`;
 }
 
+function getRelationshipLabelClass(label) {
+  const normalizedLabel = String(label || 'UNASSIGNED').trim().toUpperCase();
+  const colorName = RELATIONSHIP_LABEL_COLORS[normalizedLabel] || 'gray';
+  return `status-tag status-color-${colorName}`;
+}
+
 function formatNaicsCategory(category) {
   return String(category || 'Other')
     .replace(/_/g, ' ')
@@ -184,6 +255,152 @@ function formatBreakdownLabel(key) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function clampMatchPercentage(value) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round(numericValue)));
+}
+
+function getMatchTier(percentage) {
+  return MATCH_TIERS.find((tier) => percentage <= tier.max) || MATCH_TIERS[MATCH_TIERS.length - 1];
+}
+
+function usePrefersReducedMotion() {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    updatePreference();
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', updatePreference);
+      return () => mediaQuery.removeEventListener('change', updatePreference);
+    }
+
+    mediaQuery.addListener(updatePreference);
+    return () => mediaQuery.removeListener(updatePreference);
+  }, []);
+
+  return prefersReducedMotion;
+}
+
+function MatchProgressCircle({
+  percentage,
+  size = 96,
+  strokeWidth = 8,
+  showLabel = true,
+}) {
+  const targetPercentage = clampMatchPercentage(percentage);
+  const tier = getMatchTier(targetPercentage);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [animatedPercentage, setAnimatedPercentage] = useState(0);
+  const displayedPercentage = prefersReducedMotion ? targetPercentage : animatedPercentage;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeOffset = circumference - (displayedPercentage / 100) * circumference;
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      return undefined;
+    }
+
+    let animationFrameId;
+    const startTime = performance.now();
+
+    const animate = (currentTime) => {
+      const elapsedTime = currentTime - startTime;
+      const progress = Math.min(elapsedTime / MATCH_ANIMATION_DURATION_MS, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+      setAnimatedPercentage(Math.round(targetPercentage * easedProgress));
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [prefersReducedMotion, targetPercentage]);
+
+  return (
+    <div
+      className={`match-progress-gauge match-progress-gauge-${tier.key}`}
+      style={{ '--match-gauge-size': `${size}px` }}
+      role="img"
+      aria-label={`${targetPercentage}% match, ${tier.label.toLowerCase()}`}
+      title={`${targetPercentage}% match - ${tier.label}`}
+    >
+      <div className="match-progress-circle">
+        <svg
+          className="match-progress-ring"
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          aria-hidden="true"
+        >
+          <circle
+            className="match-progress-ring-track"
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            strokeWidth={strokeWidth}
+          />
+          <circle
+            className="match-progress-ring-value"
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeOffset}
+          />
+        </svg>
+        <div className="match-progress-content">
+          <span className="match-progress-percent">{displayedPercentage}%</span>
+        </div>
+      </div>
+      {showLabel && (
+        <span className="match-progress-label">
+          {tier.label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function formatRelationshipLabel(label) {
+  const normalizedLabel = String(label || 'UNASSIGNED').trim().toUpperCase();
+  return RELATIONSHIP_LABELS[normalizedLabel] || normalizedLabel.replace(/_/g, ' ');
+}
+
+function truncateWords(text, maxWords = 100) {
+  const safeText = String(text || '').trim();
+
+  if (!safeText) {
+    return '';
+  }
+
+  const words = safeText.split(/\s+/);
+
+  if (words.length <= maxWords) {
+    return safeText;
+  }
+
+  return `${words.slice(0, maxWords).join(' ')}...`;
+}
+
 function formatLastSynced() {
   return new Date().toLocaleString('en-US', {
     month: 'long',
@@ -192,6 +409,64 @@ function formatLastSynced() {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function formatMatchGeneratedAt(value) {
+  if (!value) {
+    return '';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '';
+  }
+
+  return parsedDate.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function readDismissedOpportunities() {
+  try {
+    const storedValue = window.localStorage.getItem(DISMISSED_STORAGE_KEY);
+    const parsedValue = JSON.parse(storedValue || '[]');
+    return Array.isArray(parsedValue) ? parsedValue : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedOpportunities(ids) {
+  window.localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(ids));
+}
+
+function readRecentlyViewedContracts(workspaceType) {
+  try {
+    const storedValue = window.localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
+    const parsedValue = JSON.parse(storedValue || '{}');
+    const workspaceIds = parsedValue?.[workspaceType];
+    return Array.isArray(workspaceIds) ? workspaceIds : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentlyViewedContracts(workspaceType, ids) {
+  try {
+    const storedValue = window.localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
+    const parsedValue = JSON.parse(storedValue || '{}');
+    parsedValue[workspaceType] = ids;
+    window.localStorage.setItem(RECENTLY_VIEWED_STORAGE_KEY, JSON.stringify(parsedValue));
+  } catch {
+    window.localStorage.setItem(
+      RECENTLY_VIEWED_STORAGE_KEY,
+      JSON.stringify({ [workspaceType]: ids }),
+    );
+  }
 }
 
 async function syncSamOpportunities(limit = 10) {
@@ -212,46 +487,35 @@ async function syncSamOpportunities(limit = 10) {
   return data;
 }
 
-async function dismissContract(contractId, token) {
-  if (!token) {
-    throw new Error('Please log in to remove contracts.');
+async function readJsonResponse(response, fallbackMessage) {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    return response.json();
   }
 
-  const response = await fetch(`${CONTRACTS_API_URL}${contractId}/dismiss/`, {
-    method: 'DELETE',
-    headers: {
-      Authorization: `Token ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ reason: 'not_interested' }),
-  });
+  const responseText = await response.text();
+  const isHtmlResponse = responseText.trim().startsWith('<!DOCTYPE')
+    || responseText.trim().startsWith('<html');
 
-  let data = {};
-  try {
-    data = await response.json();
-  } catch {
-    data = {};
+  if (isHtmlResponse) {
+    throw new Error(`${fallbackMessage} The server returned HTML instead of JSON. Restart the Django server and confirm the API route is available.`);
   }
 
-  if (!response.ok) {
-    throw new Error(data.detail || 'Failed to remove contract.');
-  }
-
-  return data;
+  throw new Error(responseText || fallbackMessage);
 }
 
 async function fetchOpportunities(signal, token, { matchUser = false } = {}) {
   const headers = token ? { Authorization: `Token ${token}` } : {};
-  const url = new URL(matchUser ? MATCHED_CONTRACTS_API_URL : OPPORTUNITIES_API_URL);
+  const url = new URL(OPPORTUNITIES_API_URL);
+
+  if (matchUser) {
+    url.searchParams.set('match_user', 'true');
+  }
 
   const response = await fetch(url, { signal, headers });
 
-  let data = [];
-  try {
-    data = await response.json();
-  } catch {
-    data = [];
-  }
+  const data = await readJsonResponse(response, 'Failed to load opportunities.');
 
   if (!response.ok) {
     throw new Error(data.detail || 'Failed to load opportunities.');
@@ -262,6 +526,64 @@ async function fetchOpportunities(signal, token, { matchUser = false } = {}) {
   }
 
   return data;
+}
+
+function normalizeMatchCachePayload(data) {
+  const results = Array.isArray(data?.results) ? data.results : [];
+  const matchCache = data?.match_cache && typeof data.match_cache === 'object'
+    ? data.match_cache
+    : { exists: false, generated_at: null, stale: false };
+
+  return {
+    results,
+    matchCache: {
+      exists: Boolean(matchCache.exists),
+      generatedAt: matchCache.generated_at || null,
+      stale: Boolean(matchCache.stale),
+    },
+  };
+}
+
+async function fetchCachedMatches(signal, token) {
+  if (!token) {
+    throw new Error('Authentication credentials were not provided.');
+  }
+
+  const response = await fetch(MATCHES_API_URL, {
+    signal,
+    headers: {
+      Authorization: `Token ${token}`,
+    },
+  });
+
+  const data = await readJsonResponse(response, 'Failed to load saved AI matches.');
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to load saved AI matches.');
+  }
+
+  return normalizeMatchCachePayload(data);
+}
+
+async function refreshCachedMatches(token) {
+  if (!token) {
+    throw new Error('Authentication credentials were not provided.');
+  }
+
+  const response = await fetch(MATCHES_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Token ${token}`,
+    },
+  });
+
+  const data = await readJsonResponse(response, 'Failed to generate AI matches.');
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to generate AI matches.');
+  }
+
+  return normalizeMatchCachePayload(data);
 }
 
 async function fetchProgressSummary(signal, token) {
@@ -289,6 +611,7 @@ function isTrackedContract(opportunity) {
   return (
     (opportunity.contract_progress && opportunity.contract_progress !== 'NONE')
     || (opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED')
+    || (opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED')
   );
 }
 
@@ -296,6 +619,7 @@ function ContractsDisplayPage({ workspaceType }) {
   const config = WORKSPACE_CONFIG[workspaceType] || WORKSPACE_CONFIG.dashboard;
   const navigate = useNavigate();
   const location = useLocation();
+  const recentSectionRef = useRef(null);
   const restoreWorkspaceState = (
     location.state?.restoreWorkspace?.pathname === location.pathname
       ? location.state.restoreWorkspace
@@ -309,11 +633,19 @@ function ContractsDisplayPage({ workspaceType }) {
   const [selectedAgency, setSelectedAgency] = useState(restoreWorkspaceState?.selectedAgency || '');
   const [selectedPartner, setSelectedPartner] = useState(restoreWorkspaceState?.selectedPartner || '');
   const [selectedStatus, setSelectedStatus] = useState(restoreWorkspaceState?.selectedStatus || '');
-  const [dismissingOpportunityIds, setDismissingOpportunityIds] = useState([]);
+  const [dismissedOpportunityIds, setDismissedOpportunityIds] = useState(() => readDismissedOpportunities());
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState(() => readRecentlyViewedContracts(workspaceType));
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isGeneratingMatches, setIsGeneratingMatches] = useState(false);
   const [lastSynced, setLastSynced] = useState('Not synced yet');
+  const [matchCache, setMatchCache] = useState({
+    exists: false,
+    generatedAt: null,
+    stale: false,
+  });
   const [progressSummary, setProgressSummary] = useState({
     won: 0,
     lost: 0,
@@ -331,12 +663,14 @@ function ContractsDisplayPage({ workspaceType }) {
       setError('');
 
       try {
-        const data = await fetchOpportunities(
-          controller.signal,
-          token,
-          { matchUser: workspaceType === 'matchmaking' }
-        );
-        setAllOpportunities(data);
+        if (workspaceType === 'matchmaking') {
+          const { results, matchCache: cacheMetadata } = await fetchCachedMatches(controller.signal, token);
+          setAllOpportunities(results);
+          setMatchCache(cacheMetadata);
+        } else {
+          const data = await fetchOpportunities(controller.signal, token);
+          setAllOpportunities(data);
+        }
 
         if (config.showSummary) {
           const summary = await fetchProgressSummary(controller.signal, token);
@@ -353,7 +687,7 @@ function ContractsDisplayPage({ workspaceType }) {
         setError(
           isNetworkError
             ? 'Could not connect to the server.'
-            : fetchError.message || 'Failed to load opportunities.'
+            : fetchError.message || 'Failed to load opportunities.',
         );
         setAllOpportunities([]);
       } finally {
@@ -368,48 +702,56 @@ function ContractsDisplayPage({ workspaceType }) {
     return () => controller.abort();
   }, [config.showSummary, token, workspaceType]);
 
+  useEffect(() => {
+    writeDismissedOpportunities(dismissedOpportunityIds);
+  }, [dismissedOpportunityIds]);
+
+  useEffect(() => {
+    writeRecentlyViewedContracts(workspaceType, recentlyViewedIds);
+  }, [recentlyViewedIds, workspaceType]);
+
   const workspaceOpportunities = useMemo(() => {
-    const visibleOpportunities = allOpportunities.filter(
-      (opportunity) => !dismissingOpportunityIds.includes(opportunity.id)
-    );
+    const visibleOpportunities = config.allowDismiss
+      ? allOpportunities.filter((opportunity) => !dismissedOpportunityIds.includes(opportunity.id))
+      : allOpportunities;
 
     if (workspaceType === 'myContracts') {
       return visibleOpportunities.filter(isTrackedContract);
     }
 
     return visibleOpportunities;
-  }, [allOpportunities, dismissingOpportunityIds, workspaceType]);
+  }, [allOpportunities, config.allowDismiss, dismissedOpportunityIds, workspaceType]);
 
   const agencyOptions = useMemo(() => Array.from(
     new Set(
       workspaceOpportunities
         .map((opportunity) => opportunity.agency)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
   const partnerOptions = useMemo(() => Array.from(
     new Set(
       workspaceOpportunities
         .map((opportunity) => opportunity.partner)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
   const naicsOptions = useMemo(() => Array.from(
     new Set(
       workspaceOpportunities
         .map((opportunity) => opportunity.naics_code)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   ).sort(), [workspaceOpportunities]);
 
   const statusOptions = useMemo(() => Array.from(
     new Set(
       workspaceOpportunities
         .map((opportunity) => opportunity.status)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
   const filteredOpportunities = useMemo(() => {
@@ -425,6 +767,7 @@ function ContractsDisplayPage({ workspaceType }) {
         opportunity.description,
         opportunity.partner,
         opportunity.status,
+        opportunity.relationship_label,
         opportunity.naics_code,
       ]
         .filter(Boolean)
@@ -446,7 +789,57 @@ function ContractsDisplayPage({ workspaceType }) {
     });
   }, [workspaceOpportunities, searchTerm, selectedAgency, selectedPartner, selectedStatus, selectedNaics]);
 
-  const recentOpportunities = useMemo(() => filteredOpportunities.slice(0, 3), [filteredOpportunities]);
+  const totalPages = Math.max(1, Math.ceil(filteredOpportunities.length / CONTRACTS_PER_PAGE));
+
+  const paginatedOpportunities = useMemo(() => {
+    const startIndex = (currentPage - 1) * CONTRACTS_PER_PAGE;
+    return filteredOpportunities.slice(startIndex, startIndex + CONTRACTS_PER_PAGE);
+  }, [currentPage, filteredOpportunities]);
+
+  const recentOpportunities = useMemo(() => {
+    if (!recentlyViewedIds.length) {
+      return [];
+    }
+
+    const opportunityMap = new Map(workspaceOpportunities.map((opportunity) => [opportunity.id, opportunity]));
+
+    return recentlyViewedIds
+      .map((opportunityId) => opportunityMap.get(opportunityId))
+      .filter(Boolean);
+  }, [recentlyViewedIds, workspaceOpportunities]);
+
+  const bottomSectionOpportunities = useMemo(() => (
+    config.showRecentVisits
+      ? recentOpportunities
+      : filteredOpportunities.slice(0, 3)
+  ), [config.showRecentVisits, filteredOpportunities, recentOpportunities]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedNaics, selectedAgency, selectedPartner, selectedStatus, workspaceType]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (loading || !restoreWorkspaceState?.contractId || hasRestoredPosition.current) {
+      return;
+    }
+
+    const matchingIndex = filteredOpportunities.findIndex(
+      (opportunity) => opportunity.id === restoreWorkspaceState.contractId,
+    );
+
+    if (matchingIndex >= 0) {
+      const targetPage = Math.floor(matchingIndex / CONTRACTS_PER_PAGE) + 1;
+      if (targetPage !== currentPage) {
+        setCurrentPage(targetPage);
+      }
+    }
+  }, [currentPage, filteredOpportunities, loading, restoreWorkspaceState]);
 
   useEffect(() => {
     if (loading || hasRestoredPosition.current || !restoreWorkspaceState) {
@@ -457,7 +850,7 @@ function ContractsDisplayPage({ workspaceType }) {
 
     window.requestAnimationFrame(() => {
       const contractCard = document.querySelector(
-        `[data-contract-id="${restoreWorkspaceState.contractId}"]`
+        `[data-contract-id="${restoreWorkspaceState.contractId}"]`,
       );
 
       if (contractCard) {
@@ -472,6 +865,11 @@ function ContractsDisplayPage({ workspaceType }) {
   }, [loading, restoreWorkspaceState]);
 
   const handleViewDetails = (opportunityId) => {
+    setRecentlyViewedIds((currentIds) => [
+      opportunityId,
+      ...currentIds.filter((existingId) => existingId !== opportunityId),
+    ].slice(0, MAX_RECENTLY_VIEWED));
+
     navigate(`/contracts/${opportunityId}`, {
       state: {
         workspaceReturn: {
@@ -489,6 +887,10 @@ function ContractsDisplayPage({ workspaceType }) {
     });
   };
 
+  const handleJumpToRecent = () => {
+    recentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const handleSyncContracts = async () => {
     if (isSyncing) {
       return;
@@ -503,15 +905,18 @@ function ContractsDisplayPage({ workspaceType }) {
       const summaryPromise = config.showSummary
         ? fetchProgressSummary(undefined, token)
         : Promise.resolve(progressSummary);
+
       const [catalogData, summaryData] = await Promise.all([
-        fetchOpportunities(undefined, token, { matchUser: workspaceType === 'matchmaking' }),
+        fetchOpportunities(undefined, token),
         summaryPromise,
       ]);
 
       setAllOpportunities(catalogData);
+
       if (config.showSummary) {
         setProgressSummary(summaryData);
       }
+
       setLastSynced(formatLastSynced());
     } catch (fetchError) {
       const isNetworkError = fetchError instanceof TypeError;
@@ -519,40 +924,64 @@ function ContractsDisplayPage({ workspaceType }) {
       setError(
         isNetworkError
           ? 'Could not connect to the server.'
-          : fetchError.message || 'Sync failed.'
+          : fetchError.message || 'Sync failed.',
       );
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const handleDismissOpportunity = async (opportunityId) => {
-    if (dismissingOpportunityIds.includes(opportunityId)) {
+  const handleRefreshMatches = async () => {
+    if (isGeneratingMatches) {
       return;
     }
 
+    setIsGeneratingMatches(true);
     setError('');
-    setDismissingOpportunityIds((currentIds) => (
-      currentIds.includes(opportunityId) ? currentIds : [...currentIds, opportunityId]
-    ));
 
     try {
-      await dismissContract(opportunityId, token);
-      setAllOpportunities((currentOpportunities) => (
-        currentOpportunities.filter((opportunity) => opportunity.id !== opportunityId)
-      ));
-
-      if (config.showSummary) {
-        const summary = await fetchProgressSummary(undefined, token);
-        setProgressSummary(summary);
-      }
-    } catch (dismissError) {
-      setDismissingOpportunityIds((currentIds) => (
-        currentIds.filter((currentId) => currentId !== opportunityId)
-      ));
-      setError(dismissError.message || 'Failed to remove contract.');
+      const { results, matchCache: cacheMetadata } = await refreshCachedMatches(token);
+      setAllOpportunities(results);
+      setMatchCache(cacheMetadata);
+      setCurrentPage(1);
+      setLastSynced(formatLastSynced());
+    } catch (refreshError) {
+      const isNetworkError = refreshError instanceof TypeError;
+      setError(
+        isNetworkError
+          ? 'Could not connect to the server.'
+          : refreshError.message || 'Failed to generate AI matches.',
+      );
+    } finally {
+      setIsGeneratingMatches(false);
     }
   };
+
+  const handleDismissOpportunity = (opportunityId) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to mark this contract as not interested and remove it from this page? You cannot undo this.',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDismissedOpportunityIds((currentIds) => (
+      currentIds.includes(opportunityId)
+        ? currentIds
+        : [...currentIds, opportunityId]
+    ));
+  };
+
+  const isMatchmakingWorkspace = workspaceType === 'matchmaking';
+  const matchActionLabel = matchCache.exists ? 'Refresh AI Matches' : 'Generate AI Matches';
+  const displayedMatchActionLabel = isGeneratingMatches ? 'Generating Matches...' : matchActionLabel;
+  const formattedMatchGeneratedAt = formatMatchGeneratedAt(matchCache.generatedAt);
+  const emptyStateMessage = (
+    isMatchmakingWorkspace && !matchCache.exists
+      ? 'No AI matches generated yet. Generate matches to compare your profile with available opportunities.'
+      : config.emptyMessage
+  );
 
   return (
     <div className="dashboard-layout">
@@ -566,21 +995,25 @@ function ContractsDisplayPage({ workspaceType }) {
           >
             Dashboard
           </button>
+
           <button
             className={`sidebar-link ${config.activeNav === 'matchmaking' ? 'active' : ''}`}
             onClick={() => navigate('/ai-matchmaking')}
           >
             AI Matchmaking
           </button>
+
           <button
             className={`sidebar-link ${config.activeNav === 'my-contracts' ? 'active' : ''}`}
             onClick={() => navigate('/my-contracts')}
           >
             My Contracts
           </button>
+
           <button className="sidebar-link" onClick={() => navigate('/profile')}>
             Profile
           </button>
+
           <button className="sidebar-link" onClick={() => navigate('/notifications')}>
             <span className="sidebar-link-content">
               <span>Notifications</span>
@@ -593,13 +1026,6 @@ function ContractsDisplayPage({ workspaceType }) {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <input
-              type="text"
-              placeholder={config.searchPlaceholder}
-              className="search-bar"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
             <div className="topbar-icons">
               <span
                 className="profile-icon-placeholder"
@@ -617,20 +1043,55 @@ function ContractsDisplayPage({ workspaceType }) {
           <div className="dashboard-inner">
             <h1 className="page-title">{config.pageTitle}</h1>
 
+            <div className="workspace-quick-actions">
+              <button
+                className="jump-section-button"
+                type="button"
+                onClick={handleJumpToRecent}
+              >
+                Jump to {config.recentTitle}
+              </button>
+
+              {isMatchmakingWorkspace && (
+                <div className="match-refresh-panel">
+                  <button
+                    className="match-refresh-button"
+                    type="button"
+                    onClick={handleRefreshMatches}
+                    disabled={isGeneratingMatches}
+                  >
+                    {displayedMatchActionLabel}
+                  </button>
+                  <div className="match-refresh-copy">
+                    <p>Matches are saved to reduce AI usage. Refresh only when your profile or opportunities change.</p>
+                    {formattedMatchGeneratedAt && (
+                      <p>Last refreshed: {formattedMatchGeneratedAt}</p>
+                    )}
+                    {matchCache.stale && (
+                      <p>Your profile or opportunities may have changed. Refresh AI Matches to update results.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {config.showSummary && (
               <section className="section progress-summary-section">
                 <div className="progress-summary-card">
                   <span className="progress-summary-label">Tracked</span>
                   <strong>{progressSummary.tracked}</strong>
                 </div>
+
                 <div className="progress-summary-card">
                   <span className="progress-summary-label">Pending</span>
                   <strong>{progressSummary.pending}</strong>
                 </div>
+
                 <div className="progress-summary-card">
                   <span className="progress-summary-label">Won</span>
                   <strong>{progressSummary.won}</strong>
                 </div>
+
                 <div className="progress-summary-card">
                   <span className="progress-summary-label">Lost</span>
                   <strong>{progressSummary.lost}</strong>
@@ -643,8 +1104,11 @@ function ContractsDisplayPage({ workspaceType }) {
                 <div className="sync-header-row">
                   <div>
                     <h2 className="section-title">Contract Sync</h2>
-                    <p className="section-helper-text">Load the latest backend opportunities and refresh the dashboard.</p>
+                    <p className="section-helper-text">
+                      Load the latest backend opportunities and refresh the dashboard.
+                    </p>
                   </div>
+
                   <button
                     className="sync-button"
                     onClick={handleSyncContracts}
@@ -656,7 +1120,9 @@ function ContractsDisplayPage({ workspaceType }) {
 
                 <div className="sync-feedback-row">
                   <p className="sync-meta-text">Last synced: {lastSynced}</p>
-                  {!error && !loading && <p className="sync-success-text">Showing live backend opportunities.</p>}
+                  {!error && !loading && (
+                    <p className="sync-success-text">Showing live backend opportunities.</p>
+                  )}
                 </div>
               </section>
             )}
@@ -667,6 +1133,7 @@ function ContractsDisplayPage({ workspaceType }) {
                   <h2 className="section-title">{config.overviewTitle}</h2>
                   <p className="section-helper-text">{config.overviewText}</p>
                 </div>
+
                 <div className="workspace-overview-metric">
                   <span>{config.overviewMetricLabel}</span>
                   <strong>{workspaceOpportunities.length}</strong>
@@ -680,6 +1147,23 @@ function ContractsDisplayPage({ workspaceType }) {
                   <h2 className="section-title">{config.sectionTitle}</h2>
                   <p className="section-helper-text">{config.sectionHelperText}</p>
                 </div>
+              </div>
+
+              <div className="filters-grid">
+                <div className="filter-group filter-group-search">
+                  <label htmlFor="contractsSearch" className="filter-label">
+                    Search
+                  </label>
+                  <input
+                    id="contractsSearch"
+                    type="text"
+                    placeholder={config.searchPlaceholder}
+                    className="search-bar contracts-search-bar"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                  />
+                </div>
+
                 <div className="filter-group">
                   <label htmlFor="agencyFilter" className="filter-label">
                     Agency
@@ -698,6 +1182,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     ))}
                   </select>
                 </div>
+
                 <div className="filter-group">
                   <label htmlFor="partnerFilter" className="filter-label">
                     Partner
@@ -716,6 +1201,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     ))}
                   </select>
                 </div>
+
                 <div className="filter-group">
                   <label htmlFor="naicsFilter" className="filter-label">
                     NAICS Code
@@ -734,6 +1220,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     ))}
                   </select>
                 </div>
+
                 <div className="filter-group">
                   <label htmlFor="statusFilter" className="filter-label">
                     Status
@@ -759,163 +1246,249 @@ function ContractsDisplayPage({ workspaceType }) {
               ) : error ? (
                 <div className="state-card state-card-error">{error}</div>
               ) : filteredOpportunities.length === 0 ? (
-                <div className="state-card">{config.emptyMessage}</div>
+                <div className="state-card">{emptyStateMessage}</div>
               ) : (
-                <div className="contract-list">
-                  {filteredOpportunities.map((opportunity) => {
-                    const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
-                    const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
-                    const isDismissing = dismissingOpportunityIds.includes(opportunity.id);
-                    const showMatchDetails = workspaceType === 'matchmaking' && Number.isFinite(opportunity.match_percentage);
-                    const strongestAlignment = Array.isArray(opportunity.strongest_alignment)
-                      ? opportunity.strongest_alignment.filter(Boolean)
-                      : [];
-                    const weakAlignment = Array.isArray(opportunity.weak_alignment)
-                      ? opportunity.weak_alignment.filter(Boolean)
-                      : [];
-                    const matchBreakdown = opportunity.match_breakdown && typeof opportunity.match_breakdown === 'object'
-                      ? opportunity.match_breakdown
-                      : null;
+                <>
+                  <div className="contract-list">
+                    {paginatedOpportunities.map((opportunity) => {
+                      const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
+                      const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
+                      const hasRelationshipTag = opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED';
+                      const hasMatchPercentage = (
+                        opportunity.match_percentage !== null
+                        && opportunity.match_percentage !== undefined
+                        && Number.isFinite(Number(opportunity.match_percentage))
+                      );
+                      const showMatchDetails = (
+                        workspaceType === 'matchmaking'
+                        || hasMatchPercentage
+                      ) && hasMatchPercentage;
+                      const strongestAlignment = Array.isArray(opportunity.strongest_alignment)
+                        ? opportunity.strongest_alignment.filter(Boolean)
+                        : [];
+                      const weakAlignment = Array.isArray(opportunity.weak_alignment)
+                        ? opportunity.weak_alignment.filter(Boolean)
+                        : [];
+                      const matchBreakdown = opportunity.match_breakdown && typeof opportunity.match_breakdown === 'object'
+                        ? opportunity.match_breakdown
+                        : null;
 
-                    return (
-                      <div
-                        key={opportunity.id}
-                        className="contract-card"
-                        data-contract-id={opportunity.id}
-                      >
-                        <div className="card-heading-row">
-                          <div className="card-heading-copy">
-                            <div className="title-row">
-                              <h3>{opportunity.title}</h3>
-                              {showMatchDetails && (
-                                <span className="match-percentage-badge">
-                                  {opportunity.match_percentage}% match
+                      return (
+                        <div
+                          key={opportunity.id}
+                          className="contract-card"
+                          data-contract-id={opportunity.id}
+                        >
+                          <div className={`card-heading-row ${(hasProgressTag || hasWorkflowTag || hasRelationshipTag) ? 'card-heading-row-with-tags' : 'card-heading-row-no-tags'}`}>
+                            <div className="card-heading-copy">
+                              <div className="title-row">
+                                <h3>{opportunity.title}</h3>
+                                {showMatchDetails && (
+                                  <MatchProgressCircle percentage={opportunity.match_percentage} />
+                                )}
+                                <span
+                                  className="summary-button"
+                                  onMouseEnter={() => setHoveredId(opportunity.id)}
+                                  onMouseLeave={() => setHoveredId(null)}
+                                >
+                                  View Summary
                                 </span>
-                              )}
-                              <span
-                                className="summary-button"
-                                onMouseEnter={() => setHoveredId(opportunity.id)}
-                                onMouseLeave={() => setHoveredId(null)}
-                              >
-                                View Summary
-                              </span>
-                            </div>
-                            {hoveredId === opportunity.id && (
-                              <div className="summary-popup">
-                                {opportunity.description || 'No summary available.'}
                               </div>
-                            )}
-                            {showMatchDetails && (
-                              <div className="match-insights">
-                                {strongestAlignment.length > 0 && (
-                                  <div className="match-chip-row">
-                                    {strongestAlignment.map((label) => (
-                                      <span className="alignment-chip alignment-chip-strong" key={label}>
-                                        {label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {weakAlignment.length > 0 && (
-                                  <div className="match-chip-row match-chip-row-weak">
-                                    {weakAlignment.map((label) => (
-                                      <span className="alignment-chip alignment-chip-weak" key={label}>
-                                        {label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                {matchBreakdown && (
-                                  <div className="match-breakdown-row" aria-label="Match breakdown">
-                                    {Object.entries(matchBreakdown).map(([key, value]) => (
-                                      <span className="match-breakdown-item" key={key}>
-                                        <span>{formatBreakdownLabel(key)}</span>
-                                        <strong>{value}</strong>
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            {(hasProgressTag || hasWorkflowTag) && (
-                              <div className="tracking-tag-row">
-                                {hasProgressTag && (
-                                  <span className={getProgressStatusClass(opportunity.contract_progress)}>
-                                    {formatProgressStatus(opportunity.contract_progress)}
-                                  </span>
-                                )}
-                                {hasWorkflowTag && (
-                                  <span className={getWorkflowStatusClass(opportunity.workflow_status)}>
-                                    {formatWorkflowStatus(opportunity.workflow_status)}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            {workspaceType === 'matchmaking' && opportunity.matched_reasons?.length > 0 && (
-                              <div className="tracking-tag-row">
-                                {opportunity.matched_reasons.slice(0, 2).map((reason) => (
-                                  <span className="status-tag status-color-blue" key={reason}>
-                                    {reason}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <div className="card-action-stack">
-                            <button
-                              className="note-action-button"
-                              type="button"
-                              onClick={() => handleViewDetails(opportunity.id)}
-                            >
-                              View Details
-                            </button>
-                            {config.allowDismiss && (
-                              <button
-                                className="note-secondary-button"
-                                type="button"
-                                onClick={() => handleDismissOpportunity(opportunity.id)}
-                                disabled={isDismissing}
-                              >
-                                {isDismissing ? 'Removing...' : config.dismissLabel}
-                              </button>
-                            )}
-                          </div>
-                        </div>
 
-                        <p>
-                          <strong>Agency:</strong>{' '}
-                          <span className="info-pill agency-pill">{opportunity.agency || 'Not provided'}</span>
-                        </p>
-                        <p>
-                          <strong>Partner:</strong>{' '}
-                          <span className="info-pill partner-pill">{opportunity.partner || 'Not provided'}</span>
-                        </p>
-                        <p>
-                          <strong>NAICS Code:</strong>{' '}
-                          <span
-                            className={getNaicsCategoryClass(opportunity.naics_category)}
-                            title={formatNaicsCategory(opportunity.naics_category)}
-                          >
-                            {opportunity.naics_code}
-                          </span>
-                        </p>
-                        <p>
-                          <strong>Contract Status:</strong>{' '}
-                          <span className={getListingStatusClass(opportunity.status)}>
-                            {opportunity.status || 'Unknown'}
-                          </span>
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+                              {hoveredId === opportunity.id && (
+                                <div className="summary-popup">
+                                  {truncateWords(opportunity.description, 100) || 'No summary available.'}
+                                </div>
+                              )}
+
+                              {showMatchDetails && (
+                                <div className="match-insights">
+                                  {strongestAlignment.length > 0 && (
+                                    <div className="match-chip-row">
+                                      {strongestAlignment.map((label) => (
+                                        <span className="alignment-chip alignment-chip-strong" key={label}>
+                                          {label}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {weakAlignment.length > 0 && (
+                                    <div className="match-chip-row match-chip-row-weak">
+                                      {weakAlignment.map((label) => (
+                                        <span className="alignment-chip alignment-chip-weak" key={label}>
+                                          {label}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {matchBreakdown && (
+                                    <div className="match-breakdown-row" aria-label="Match breakdown">
+                                      {Object.entries(matchBreakdown).map(([key, value]) => (
+                                        <span className="match-breakdown-item" key={key}>
+                                          <span>{formatBreakdownLabel(key)}</span>
+                                          <strong>{value}</strong>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {(hasProgressTag || hasWorkflowTag || hasRelationshipTag) && (
+                                <div className="tracking-tag-row">
+                                  {hasProgressTag && (
+                                    <span className={getProgressStatusClass(opportunity.contract_progress)}>
+                                      {formatProgressStatus(opportunity.contract_progress)}
+                                    </span>
+                                  )}
+
+                                  {hasWorkflowTag && (
+                                    <span className={getWorkflowStatusClass(opportunity.workflow_status)}>
+                                      {formatWorkflowStatus(opportunity.workflow_status)}
+                                    </span>
+                                  )}
+
+                                  {hasRelationshipTag && (
+                                    <span className={getRelationshipLabelClass(opportunity.relationship_label)}>
+                                      {formatRelationshipLabel(opportunity.relationship_label)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="card-action-row">
+                              <button
+                                className="note-action-button"
+                                type="button"
+                                onClick={() => handleViewDetails(opportunity.id)}
+                              >
+                                View Details
+                              </button>
+
+                              {config.allowDismiss && (
+                                <button
+                                  className="note-secondary-button"
+                                  type="button"
+                                  onClick={() => handleDismissOpportunity(opportunity.id)}
+                                >
+                                  {config.dismissLabel}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          <p>
+                            <strong>Agency:</strong>{' '}
+                            <span className="info-pill agency-pill">
+                              {opportunity.agency || 'Not provided'}
+                            </span>
+                          </p>
+
+                          <p>
+                            <strong>Partner:</strong>{' '}
+                            <span className="info-pill partner-pill">
+                              {opportunity.partner || 'Not provided'}
+                            </span>
+                          </p>
+
+                          <p>
+                            <strong>NAICS Code:</strong>{' '}
+                            <span
+                              className={getNaicsCategoryClass(opportunity.naics_category)}
+                              title={formatNaicsCategory(opportunity.naics_category)}
+                            >
+                              {opportunity.naics_code}
+                            </span>
+                          </p>
+
+                          <p>
+                            <strong>Contract Status:</strong>{' '}
+                            <span className={getListingStatusClass(opportunity.status)}>
+                              {opportunity.status || 'Unknown'}
+                            </span>
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pagination-row">
+                    <p className="pagination-summary">
+                      Showing {Math.min((currentPage - 1) * CONTRACTS_PER_PAGE + 1, filteredOpportunities.length)}-
+                      {Math.min(currentPage * CONTRACTS_PER_PAGE, filteredOpportunities.length)} of {filteredOpportunities.length}
+                    </p>
+
+                    <div className="pagination-controls">
+                      <button
+                        className="pagination-button"
+                        type="button"
+                        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+
+                      <span className="pagination-page-indicator">
+                        Page {currentPage} of {totalPages}
+                      </span>
+
+                      <button
+                        className="pagination-button"
+                        type="button"
+                        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </section>
 
-            <section className="section">
-              <h2 className="section-title">{config.recentTitle}</h2>
-              {recentOpportunities.length === 0 ? (
-                <div className="state-card">No opportunities available for the current filters.</div>
+            <section className="section" ref={recentSectionRef}>
+              {config.showRecentVisits ? (
+                <div className="section-heading-row recent-section-heading-row">
+                  <div>
+                    <h2 className="section-title">{config.recentTitle}</h2>
+                    <p className="section-helper-text">
+                      Contracts you opened with View Details show up here so you can get back to them faster.
+                    </p>
+                  </div>
+
+                  <button
+                    className="jump-section-button jump-section-button-secondary"
+                    type="button"
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  >
+                    Back to Top
+                  </button>
+                </div>
+              ) : (
+                <div className="section-heading-row recent-section-heading-row">
+                  <div>
+                    <h2 className="section-title">{config.recentTitle}</h2>
+                  </div>
+
+                  <button
+                    className="jump-section-button jump-section-button-secondary"
+                    type="button"
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  >
+                    Back to Top
+                  </button>
+                </div>
+              )}
+
+              {bottomSectionOpportunities.length === 0 ? (
+                <div className="state-card">
+                  {config.showRecentVisits
+                    ? 'No recently visited contracts yet.'
+                    : 'No opportunities available for the current filters.'}
+                </div>
               ) : (
                 <div className="history-table-wrapper">
                   <table className="history-table">
@@ -924,10 +1497,12 @@ function ContractsDisplayPage({ workspaceType }) {
                         <th>Title</th>
                         <th>Agency</th>
                         <th>NAICS</th>
+                        {config.showRecentVisits && <th>Action</th>}
                       </tr>
                     </thead>
+
                     <tbody>
-                      {recentOpportunities.map((opportunity) => (
+                      {bottomSectionOpportunities.map((opportunity) => (
                         <tr key={opportunity.id}>
                           <td>{opportunity.title}</td>
                           <td>{opportunity.agency || 'Not provided'}</td>
@@ -939,6 +1514,18 @@ function ContractsDisplayPage({ workspaceType }) {
                               {opportunity.naics_code || 'Not provided'}
                             </span>
                           </td>
+
+                          {config.showRecentVisits && (
+                            <td>
+                              <button
+                                className="history-action-button"
+                                type="button"
+                                onClick={() => handleViewDetails(opportunity.id)}
+                              >
+                                View Details
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
