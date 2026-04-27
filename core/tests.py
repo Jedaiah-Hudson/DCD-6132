@@ -1,13 +1,14 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from accounts.models import CapabilityProfile, User
-from core.models import Opportunity
+from core.models import Opportunity, UserMatchmakingCache
 from core.forms import CapabilityProfileForm
 from core.services.capability_extraction import (
     extract_text_from_capability_document,
@@ -642,7 +643,7 @@ class OpportunityApiTests(APITestCase):
         )
         profile.naics_codes.set([naics_code])
 
-        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 2)
@@ -661,7 +662,7 @@ class OpportunityApiTests(APITestCase):
         )
         profile.naics_codes.set([naics_code])
 
-        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(len(response.data), 1)
@@ -677,7 +678,144 @@ class OpportunityApiTests(APITestCase):
         )
 
     def test_match_user_requires_authentication(self):
-        response = self.client.get('/api/opportunities/?match_user=true')
+        response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true')
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_match_user_without_cache_returns_empty_without_recomputing(self):
+        CapabilityProfile.objects.create(
+            user=self.user,
+            company_name='Cached Match Co',
+            core_competencies='cloud engineering',
+        )
+
+        with patch('core.views.get_matched_contracts_for_user') as mock_matcher:
+            response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+        mock_matcher.assert_not_called()
+
+    def test_match_cache_endpoint_returns_cached_results_without_recomputing(self):
+        cached_results = [
+            {
+                'id': 123,
+                'title': 'Cached Contract',
+                'description': 'Cached result.',
+                'match_percentage': 87,
+                'strongest_alignment': ['Semantic capability match'],
+                'weak_alignment': [],
+                'match_breakdown': {
+                    'embedding': 31,
+                    'naics': 25,
+                    'capabilities': 16,
+                    'certifications': 5,
+                    'timeline': 10,
+                },
+            }
+        ]
+        UserMatchmakingCache.objects.create(
+            user=self.user,
+            results=cached_results,
+            generated_at=timezone.now(),
+        )
+
+        with patch('core.views.get_matched_contracts_for_user') as mock_matcher:
+            response = self.client.get('/api/matches/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['results'], cached_results)
+        self.assertTrue(response.data['match_cache']['exists'])
+        self.assertIsNotNone(response.data['match_cache']['generated_at'])
+        mock_matcher.assert_not_called()
+
+    def test_match_cache_endpoint_empty_state_does_not_recompute(self):
+        with patch('core.views.get_matched_contracts_for_user') as mock_matcher:
+            response = self.client.get('/api/matches/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['results'], [])
+        self.assertFalse(response.data['match_cache']['exists'])
+        mock_matcher.assert_not_called()
+
+    def test_match_cache_refresh_recomputes_and_saves_results(self):
+        contract = Contract.objects.get(title='Cloud Engineering Contract')
+        matched_payload = {
+            'contract': contract,
+            'match_score': 87,
+            'match_reasons': ['Matched cloud engineering'],
+            'match_percentage': 87,
+            'strongest_alignment': ['Semantic capability match'],
+            'weak_alignment': [],
+            'match_breakdown': {
+                'embedding': 31,
+                'naics': 25,
+                'capabilities': 16,
+                'certifications': 5,
+                'timeline': 10,
+            },
+        }
+
+        with patch('core.views.get_matched_contracts_for_user', return_value=[matched_payload]) as mock_matcher:
+            response = self.client.post('/api/matches/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['match_percentage'], 87)
+        self.assertTrue(response.data['match_cache']['exists'])
+        mock_matcher.assert_called_once()
+
+        cache = UserMatchmakingCache.objects.get(user=self.user)
+        self.assertEqual(cache.results, response.data['results'])
+        self.assertIsNotNone(cache.generated_at)
+
+    def test_reload_after_refresh_returns_same_cached_output(self):
+        contract = Contract.objects.get(title='Cloud Engineering Contract')
+        matched_payload = {
+            'contract': contract,
+            'match_score': 87,
+            'match_reasons': ['Matched cloud engineering'],
+            'match_percentage': 87,
+            'strongest_alignment': ['Semantic capability match'],
+            'weak_alignment': [],
+            'match_breakdown': {
+                'embedding': 31,
+                'naics': 25,
+                'capabilities': 16,
+                'certifications': 5,
+                'timeline': 10,
+            },
+        }
+
+        with patch('core.views.get_matched_contracts_for_user', return_value=[matched_payload]):
+            refresh_response = self.client.post('/api/matches/', **self.auth_headers)
+
+        with patch('core.views.get_matched_contracts_for_user') as mock_matcher:
+            cached_response = self.client.get('/api/matches/', **self.auth_headers)
+
+        self.assertEqual(cached_response.status_code, 200)
+        self.assertEqual(cached_response.data['results'], refresh_response.data['results'])
+        mock_matcher.assert_not_called()
+
+    def test_match_cache_is_per_user(self):
+        other_user = User.objects.create_user(
+            email='other-matcher@example.com',
+            password='StrongPass123!',
+        )
+        UserMatchmakingCache.objects.create(
+            user=other_user,
+            results=[{'id': 999, 'title': 'Other User Contract'}],
+            generated_at=timezone.now(),
+        )
+
+        response = self.client.get('/api/matches/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['results'], [])
+        self.assertFalse(response.data['match_cache']['exists'])
+
+    def test_match_cache_endpoint_requires_authentication(self):
+        response = self.client.get('/api/matches/')
 
         self.assertEqual(response.status_code, 401)
 
@@ -686,7 +824,7 @@ class OpportunityApiTests(APITestCase):
         profile = CapabilityProfile.objects.create(user=self.user, company_name='Match Co')
         profile.naics_codes.set([naics_code])
 
-        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(len(response.data), 1)
@@ -699,7 +837,7 @@ class OpportunityApiTests(APITestCase):
 
         with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
             with patch('core.services.matchmaking.OpenAI', side_effect=RuntimeError('embedding unavailable')):
-                response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+                response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertGreaterEqual(len(response.data), 1)
@@ -756,7 +894,7 @@ class OpportunityApiTests(APITestCase):
         )
         profile.naics_codes.set([naics_code])
 
-        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data[0]['title'], 'Cloud Engineering Contract')
@@ -780,7 +918,7 @@ class OpportunityApiTests(APITestCase):
             core_competencies='general delivery',
         ).naics_codes.set([matching_naics])
 
-        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         matched_naics_scores = [
@@ -829,7 +967,7 @@ class OpportunityApiTests(APITestCase):
 
         with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
             with patch('core.services.matchmaking.OpenAI', return_value=mock_client):
-                response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+                response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
@@ -854,7 +992,7 @@ class OpportunityApiTests(APITestCase):
             core_competencies='dashboard delivery',
         )
 
-        baseline_response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        baseline_response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
         baseline_score = baseline_response.data[0]['match_percentage']
 
         profile.services_offered = ['Software Development']
@@ -864,7 +1002,7 @@ class OpportunityApiTests(APITestCase):
         profile.geographic_preferences = ['Georgia']
         profile.save()
 
-        enriched_response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        enriched_response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
         enriched_match = enriched_response.data[0]
 
         self.assertGreater(enriched_match['match_percentage'], baseline_score)
@@ -880,7 +1018,7 @@ class OpportunityApiTests(APITestCase):
             core_competencies='facilities maintenance building upkeep',
         )
 
-        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
@@ -894,7 +1032,7 @@ class OpportunityApiTests(APITestCase):
             core_competencies='marine biology coral reef surveys',
         )
 
-        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        response = self.client.get('/api/opportunities/?match_user=true&refresh_matches=true', **self.auth_headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [])

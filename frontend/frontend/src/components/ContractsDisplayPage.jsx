@@ -5,6 +5,7 @@ import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
 const PROGRESS_SUMMARY_API_URL = 'http://127.0.0.1:8000/api/contract-progress/summary/';
+const MATCHES_API_URL = 'http://127.0.0.1:8000/api/matches/';
 
 const LISTING_STATUS_COLORS = {
   active: 'green',
@@ -114,6 +115,39 @@ const DISMISSED_STORAGE_KEY = 'dismissedDashboardOpportunities';
 const RECENTLY_VIEWED_STORAGE_KEY = 'recentlyViewedContractsByWorkspace';
 const MAX_RECENTLY_VIEWED = 8;
 const CONTRACTS_PER_PAGE = 10;
+const MATCH_ANIMATION_DURATION_MS = 1100;
+const MATCH_TIERS = [
+  {
+    key: 'very-poor',
+    max: 15,
+    label: 'VERY POOR MATCH',
+  },
+  {
+    key: 'poor',
+    max: 30,
+    label: 'POOR MATCH',
+  },
+  {
+    key: 'fair',
+    max: 50,
+    label: 'FAIR MATCH',
+  },
+  {
+    key: 'good',
+    max: 70,
+    label: 'GOOD MATCH',
+  },
+  {
+    key: 'strong',
+    max: 85,
+    label: 'STRONG MATCH',
+  },
+  {
+    key: 'excellent',
+    max: 100,
+    label: 'EXCELLENT MATCH',
+  },
+];
 
 const WORKSPACE_CONFIG = {
   dashboard: {
@@ -215,6 +249,137 @@ function formatWorkflowStatus(status) {
   return WORKFLOW_STATUS_LABELS[normalizedStatus] || normalizedStatus.replace(/_/g, ' ');
 }
 
+function formatBreakdownLabel(key) {
+  return String(key || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function clampMatchPercentage(value) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round(numericValue)));
+}
+
+function getMatchTier(percentage) {
+  return MATCH_TIERS.find((tier) => percentage <= tier.max) || MATCH_TIERS[MATCH_TIERS.length - 1];
+}
+
+function usePrefersReducedMotion() {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updatePreference = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    updatePreference();
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', updatePreference);
+      return () => mediaQuery.removeEventListener('change', updatePreference);
+    }
+
+    mediaQuery.addListener(updatePreference);
+    return () => mediaQuery.removeListener(updatePreference);
+  }, []);
+
+  return prefersReducedMotion;
+}
+
+function MatchProgressCircle({
+  percentage,
+  size = 96,
+  strokeWidth = 8,
+  showLabel = true,
+}) {
+  const targetPercentage = clampMatchPercentage(percentage);
+  const tier = getMatchTier(targetPercentage);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [animatedPercentage, setAnimatedPercentage] = useState(0);
+  const displayedPercentage = prefersReducedMotion ? targetPercentage : animatedPercentage;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeOffset = circumference - (displayedPercentage / 100) * circumference;
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      return undefined;
+    }
+
+    let animationFrameId;
+    const startTime = performance.now();
+
+    const animate = (currentTime) => {
+      const elapsedTime = currentTime - startTime;
+      const progress = Math.min(elapsedTime / MATCH_ANIMATION_DURATION_MS, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+      setAnimatedPercentage(Math.round(targetPercentage * easedProgress));
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [prefersReducedMotion, targetPercentage]);
+
+  return (
+    <div
+      className={`match-progress-gauge match-progress-gauge-${tier.key}`}
+      style={{ '--match-gauge-size': `${size}px` }}
+      role="img"
+      aria-label={`${targetPercentage}% match, ${tier.label.toLowerCase()}`}
+      title={`${targetPercentage}% match - ${tier.label}`}
+    >
+      <div className="match-progress-circle">
+        <svg
+          className="match-progress-ring"
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          aria-hidden="true"
+        >
+          <circle
+            className="match-progress-ring-track"
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            strokeWidth={strokeWidth}
+          />
+          <circle
+            className="match-progress-ring-value"
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeOffset}
+          />
+        </svg>
+        <div className="match-progress-content">
+          <span className="match-progress-percent">{displayedPercentage}%</span>
+        </div>
+      </div>
+      {showLabel && (
+        <span className="match-progress-label">
+          {tier.label}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function formatRelationshipLabel(label) {
   const normalizedLabel = String(label || 'UNASSIGNED').trim().toUpperCase();
   return RELATIONSHIP_LABELS[normalizedLabel] || normalizedLabel.replace(/_/g, ' ');
@@ -239,6 +404,25 @@ function truncateWords(text, maxWords = 100) {
 function formatLastSynced() {
   return new Date().toLocaleString('en-US', {
     month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatMatchGeneratedAt(value) {
+  if (!value) {
+    return '';
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return '';
+  }
+
+  return parsedDate.toLocaleString('en-US', {
+    month: 'short',
     day: 'numeric',
     year: 'numeric',
     hour: 'numeric',
@@ -303,6 +487,24 @@ async function syncSamOpportunities(limit = 10) {
   return data;
 }
 
+async function readJsonResponse(response, fallbackMessage) {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  const responseText = await response.text();
+  const isHtmlResponse = responseText.trim().startsWith('<!DOCTYPE')
+    || responseText.trim().startsWith('<html');
+
+  if (isHtmlResponse) {
+    throw new Error(`${fallbackMessage} The server returned HTML instead of JSON. Restart the Django server and confirm the API route is available.`);
+  }
+
+  throw new Error(responseText || fallbackMessage);
+}
+
 async function fetchOpportunities(signal, token, { matchUser = false } = {}) {
   const headers = token ? { Authorization: `Token ${token}` } : {};
   const url = new URL(OPPORTUNITIES_API_URL);
@@ -313,12 +515,7 @@ async function fetchOpportunities(signal, token, { matchUser = false } = {}) {
 
   const response = await fetch(url, { signal, headers });
 
-  let data = [];
-  try {
-    data = await response.json();
-  } catch {
-    data = [];
-  }
+  const data = await readJsonResponse(response, 'Failed to load opportunities.');
 
   if (!response.ok) {
     throw new Error(data.detail || 'Failed to load opportunities.');
@@ -329,6 +526,64 @@ async function fetchOpportunities(signal, token, { matchUser = false } = {}) {
   }
 
   return data;
+}
+
+function normalizeMatchCachePayload(data) {
+  const results = Array.isArray(data?.results) ? data.results : [];
+  const matchCache = data?.match_cache && typeof data.match_cache === 'object'
+    ? data.match_cache
+    : { exists: false, generated_at: null, stale: false };
+
+  return {
+    results,
+    matchCache: {
+      exists: Boolean(matchCache.exists),
+      generatedAt: matchCache.generated_at || null,
+      stale: Boolean(matchCache.stale),
+    },
+  };
+}
+
+async function fetchCachedMatches(signal, token) {
+  if (!token) {
+    throw new Error('Authentication credentials were not provided.');
+  }
+
+  const response = await fetch(MATCHES_API_URL, {
+    signal,
+    headers: {
+      Authorization: `Token ${token}`,
+    },
+  });
+
+  const data = await readJsonResponse(response, 'Failed to load saved AI matches.');
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to load saved AI matches.');
+  }
+
+  return normalizeMatchCachePayload(data);
+}
+
+async function refreshCachedMatches(token) {
+  if (!token) {
+    throw new Error('Authentication credentials were not provided.');
+  }
+
+  const response = await fetch(MATCHES_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Token ${token}`,
+    },
+  });
+
+  const data = await readJsonResponse(response, 'Failed to generate AI matches.');
+
+  if (!response.ok) {
+    throw new Error(data.detail || 'Failed to generate AI matches.');
+  }
+
+  return normalizeMatchCachePayload(data);
 }
 
 async function fetchProgressSummary(signal, token) {
@@ -384,7 +639,13 @@ function ContractsDisplayPage({ workspaceType }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isGeneratingMatches, setIsGeneratingMatches] = useState(false);
   const [lastSynced, setLastSynced] = useState('Not synced yet');
+  const [matchCache, setMatchCache] = useState({
+    exists: false,
+    generatedAt: null,
+    stale: false,
+  });
   const [progressSummary, setProgressSummary] = useState({
     won: 0,
     lost: 0,
@@ -402,12 +663,14 @@ function ContractsDisplayPage({ workspaceType }) {
       setError('');
 
       try {
-        const data = await fetchOpportunities(
-          controller.signal,
-          token,
-          { matchUser: workspaceType === 'matchmaking' },
-        );
-        setAllOpportunities(data);
+        if (workspaceType === 'matchmaking') {
+          const { results, matchCache: cacheMetadata } = await fetchCachedMatches(controller.signal, token);
+          setAllOpportunities(results);
+          setMatchCache(cacheMetadata);
+        } else {
+          const data = await fetchOpportunities(controller.signal, token);
+          setAllOpportunities(data);
+        }
 
         if (config.showSummary) {
           const summary = await fetchProgressSummary(controller.signal, token);
@@ -644,7 +907,7 @@ function ContractsDisplayPage({ workspaceType }) {
         : Promise.resolve(progressSummary);
 
       const [catalogData, summaryData] = await Promise.all([
-        fetchOpportunities(undefined, token, { matchUser: workspaceType === 'matchmaking' }),
+        fetchOpportunities(undefined, token),
         summaryPromise,
       ]);
 
@@ -668,6 +931,32 @@ function ContractsDisplayPage({ workspaceType }) {
     }
   };
 
+  const handleRefreshMatches = async () => {
+    if (isGeneratingMatches) {
+      return;
+    }
+
+    setIsGeneratingMatches(true);
+    setError('');
+
+    try {
+      const { results, matchCache: cacheMetadata } = await refreshCachedMatches(token);
+      setAllOpportunities(results);
+      setMatchCache(cacheMetadata);
+      setCurrentPage(1);
+      setLastSynced(formatLastSynced());
+    } catch (refreshError) {
+      const isNetworkError = refreshError instanceof TypeError;
+      setError(
+        isNetworkError
+          ? 'Could not connect to the server.'
+          : refreshError.message || 'Failed to generate AI matches.',
+      );
+    } finally {
+      setIsGeneratingMatches(false);
+    }
+  };
+
   const handleDismissOpportunity = (opportunityId) => {
     const confirmed = window.confirm(
       'Are you sure you want to mark this contract as not interested and remove it from this page? You cannot undo this.',
@@ -683,6 +972,16 @@ function ContractsDisplayPage({ workspaceType }) {
         : [...currentIds, opportunityId]
     ));
   };
+
+  const isMatchmakingWorkspace = workspaceType === 'matchmaking';
+  const matchActionLabel = matchCache.exists ? 'Refresh AI Matches' : 'Generate AI Matches';
+  const displayedMatchActionLabel = isGeneratingMatches ? 'Generating Matches...' : matchActionLabel;
+  const formattedMatchGeneratedAt = formatMatchGeneratedAt(matchCache.generatedAt);
+  const emptyStateMessage = (
+    isMatchmakingWorkspace && !matchCache.exists
+      ? 'No AI matches generated yet. Generate matches to compare your profile with available opportunities.'
+      : config.emptyMessage
+  );
 
   return (
     <div className="dashboard-layout">
@@ -752,6 +1051,28 @@ function ContractsDisplayPage({ workspaceType }) {
               >
                 Jump to {config.recentTitle}
               </button>
+
+              {isMatchmakingWorkspace && (
+                <div className="match-refresh-panel">
+                  <button
+                    className="match-refresh-button"
+                    type="button"
+                    onClick={handleRefreshMatches}
+                    disabled={isGeneratingMatches}
+                  >
+                    {displayedMatchActionLabel}
+                  </button>
+                  <div className="match-refresh-copy">
+                    <p>Matches are saved to reduce AI usage. Refresh only when your profile or opportunities change.</p>
+                    {formattedMatchGeneratedAt && (
+                      <p>Last refreshed: {formattedMatchGeneratedAt}</p>
+                    )}
+                    {matchCache.stale && (
+                      <p>Your profile or opportunities may have changed. Refresh AI Matches to update results.</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {config.showSummary && (
@@ -925,7 +1246,7 @@ function ContractsDisplayPage({ workspaceType }) {
               ) : error ? (
                 <div className="state-card state-card-error">{error}</div>
               ) : filteredOpportunities.length === 0 ? (
-                <div className="state-card">{config.emptyMessage}</div>
+                <div className="state-card">{emptyStateMessage}</div>
               ) : (
                 <>
                   <div className="contract-list">
@@ -933,6 +1254,24 @@ function ContractsDisplayPage({ workspaceType }) {
                       const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
                       const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
                       const hasRelationshipTag = opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED';
+                      const hasMatchPercentage = (
+                        opportunity.match_percentage !== null
+                        && opportunity.match_percentage !== undefined
+                        && Number.isFinite(Number(opportunity.match_percentage))
+                      );
+                      const showMatchDetails = (
+                        workspaceType === 'matchmaking'
+                        || hasMatchPercentage
+                      ) && hasMatchPercentage;
+                      const strongestAlignment = Array.isArray(opportunity.strongest_alignment)
+                        ? opportunity.strongest_alignment.filter(Boolean)
+                        : [];
+                      const weakAlignment = Array.isArray(opportunity.weak_alignment)
+                        ? opportunity.weak_alignment.filter(Boolean)
+                        : [];
+                      const matchBreakdown = opportunity.match_breakdown && typeof opportunity.match_breakdown === 'object'
+                        ? opportunity.match_breakdown
+                        : null;
 
                       return (
                         <div
@@ -944,6 +1283,9 @@ function ContractsDisplayPage({ workspaceType }) {
                             <div className="card-heading-copy">
                               <div className="title-row">
                                 <h3>{opportunity.title}</h3>
+                                {showMatchDetails && (
+                                  <MatchProgressCircle percentage={opportunity.match_percentage} />
+                                )}
                                 <span
                                   className="summary-button"
                                   onMouseEnter={() => setHoveredId(opportunity.id)}
@@ -956,6 +1298,41 @@ function ContractsDisplayPage({ workspaceType }) {
                               {hoveredId === opportunity.id && (
                                 <div className="summary-popup">
                                   {truncateWords(opportunity.description, 100) || 'No summary available.'}
+                                </div>
+                              )}
+
+                              {showMatchDetails && (
+                                <div className="match-insights">
+                                  {strongestAlignment.length > 0 && (
+                                    <div className="match-chip-row">
+                                      {strongestAlignment.map((label) => (
+                                        <span className="alignment-chip alignment-chip-strong" key={label}>
+                                          {label}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {weakAlignment.length > 0 && (
+                                    <div className="match-chip-row match-chip-row-weak">
+                                      {weakAlignment.map((label) => (
+                                        <span className="alignment-chip alignment-chip-weak" key={label}>
+                                          {label}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {matchBreakdown && (
+                                    <div className="match-breakdown-row" aria-label="Match breakdown">
+                                      {Object.entries(matchBreakdown).map(([key, value]) => (
+                                        <span className="match-breakdown-item" key={key}>
+                                          <span>{formatBreakdownLabel(key)}</span>
+                                          <strong>{value}</strong>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
