@@ -1,11 +1,76 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './ProfilePage.css';
 import { useNavigate } from 'react-router-dom';
+import Select from 'react-select';
 import NaicsMultiSelect from '../components/NaicsMultiSelect';
 import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const ACCEPTED_DOCUMENT_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
 const ACCEPTED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
+const SERVICES_OFFERED_OPTIONS = [
+  'Software Development',
+  'Cybersecurity',
+  'Data Analytics',
+  'AI / Machine Learning',
+  'Cloud Services',
+  'IT Support',
+  'Workforce Training',
+  'Manufacturing Support',
+  'Grant Writing',
+  'Project Management',
+  'Business Consulting',
+  'Engineering Services',
+  'Robotics / Automation',
+];
+const TARGET_INDUSTRY_OPTIONS = [
+  'Government',
+  'Manufacturing',
+  'Education',
+  'Healthcare',
+  'Defense',
+  'Transportation',
+  'Energy',
+  'Construction',
+  'Nonprofit',
+  'Workforce Development',
+  'Technology',
+  'Public Safety',
+];
+const OPPORTUNITY_TYPE_OPTIONS = [
+  'Prime Contract',
+  'Subcontract',
+  'Partnership',
+  'Grant',
+  'Training Contract',
+  'Technical Services',
+  'Consulting Contract',
+  'Research Opportunity',
+];
+const MATCHMAKING_TAG_OPTIONS = [
+  'Cybersecurity',
+  'Application Development',
+  'Data Dashboards',
+  'Automation',
+  'Cloud Migration',
+  'AI',
+  'Machine Learning',
+  'Curriculum Development',
+  'STEM Education',
+  'Digital Transformation',
+  'Compliance',
+  'Database Management',
+  'Technical Writing',
+  'Procurement Support',
+];
+const GEOGRAPHIC_PREFERENCE_OPTIONS = [
+  'Georgia',
+  'Southeast',
+  'Nationwide',
+  'Remote',
+  'Local Only',
+  'Hybrid / On-site',
+];
+const MATCHMAKING_DETAIL_WARNING = 'Your profile is missing matchmaking details. Leaving Services Offered, Target Industries, Opportunity Types, Tags, or Geographic Preferences blank may lower your AI match percentages because the system has less information to compare against contracts.';
 
 const defaultMailboxConnections = [
   {
@@ -65,6 +130,29 @@ function formatMailboxSyncTime() {
   });
 }
 
+function toSelectOptions(values) {
+  return values.map((value) => ({ value, label: value }));
+}
+
+function MatchmakingMultiSelect({ label, helperText, options, value, onChange }) {
+  const selectOptions = useMemo(() => toSelectOptions(options), [options]);
+
+  return (
+    <div className="profile-field profile-field-full">
+      <label className="profile-label">{label}</label>
+      <p className="profile-field-helper">{helperText}</p>
+      <Select
+        isMulti
+        isSearchable
+        classNamePrefix="profile-match-select"
+        options={selectOptions}
+        value={selectOptions.filter((option) => value.includes(option.value))}
+        onChange={(selected) => onChange(selected ? selected.map((option) => option.value) : [])}
+      />
+    </div>
+  );
+}
+
 function ProfilePage() {
   const navigate = useNavigate();
   const [companyName, setCompanyName] = useState('');
@@ -74,6 +162,11 @@ function ProfilePage() {
   const [naicsCodes, setNaicsCodes] = useState([]);
   const [certifications, setCertifications] = useState('');
   const [pastPerformance, setPastPerformance] = useState('');
+  const [servicesOffered, setServicesOffered] = useState([]);
+  const [targetIndustries, setTargetIndustries] = useState([]);
+  const [preferredOpportunityTypes, setPreferredOpportunityTypes] = useState([]);
+  const [matchmakingTags, setMatchmakingTags] = useState([]);
+  const [geographicPreferences, setGeographicPreferences] = useState([]);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -95,6 +188,7 @@ function ProfilePage() {
   const [linkedEmailLabel, setLinkedEmailLabel] = useState('');
   const [isSavingLinkedEmail, setIsSavingLinkedEmail] = useState(false);
   const [removingLinkedEmailId, setRemovingLinkedEmailId] = useState(null);
+  const [showMatchmakingWarning, setShowMatchmakingWarning] = useState(false);
 
   const token = localStorage.getItem('token');
   const unreadCount = useNotificationSummary();
@@ -124,6 +218,11 @@ function ProfilePage() {
     naics_codes: naicsCodes,
     certifications: certifications,
     past_performance: pastPerformance,
+    services_offered: servicesOffered,
+    target_industries: targetIndustries,
+    preferred_opportunity_types: preferredOpportunityTypes,
+    matchmaking_tags: matchmakingTags,
+    geographic_preferences: geographicPreferences,
     contact_name: contactName,
     contact_email: contactEmail,
     contact_phone: contactPhone,
@@ -138,6 +237,11 @@ function ProfilePage() {
     setNaicsCodes(profile.naics_codes || []);
     setCertifications(profile.certifications || '');
     setPastPerformance(profile.past_performance || '');
+    setServicesOffered(Array.isArray(profile.services_offered) ? profile.services_offered : []);
+    setTargetIndustries(Array.isArray(profile.target_industries) ? profile.target_industries : []);
+    setPreferredOpportunityTypes(Array.isArray(profile.preferred_opportunity_types) ? profile.preferred_opportunity_types : []);
+    setMatchmakingTags(Array.isArray(profile.matchmaking_tags) ? profile.matchmaking_tags : []);
+    setGeographicPreferences(Array.isArray(profile.geographic_preferences) ? profile.geographic_preferences : []);
     setContactName(profile.contact_name || '');
     setContactEmail(profile.contact_email || '');
     setContactPhone(profile.contact_phone || '');
@@ -180,7 +284,7 @@ function ProfilePage() {
         setEditing(Boolean(profileData.editing));
         setLastProcessedFile(profileData.processed_file_name || 'None');
         setLinkedEmails(linkedEmailsData.emails || []);
-      } catch (error) {
+      } catch {
         setUploadError('Could not load saved profile.');
       }
     };
@@ -239,17 +343,26 @@ function ProfilePage() {
       setExtractedText(data.extracted_text || '');
       setSuccessMessage(data.message || 'Fields extracted successfully.');
       setShowUploadModal(false);
-    } catch (error) {
+    } catch {
       setUploadError('Could not connect to the server.');
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleSaveProfile = async () => {
+  const countEmptyMatchmakingFields = () => [
+    servicesOffered,
+    targetIndustries,
+    preferredOpportunityTypes,
+    matchmakingTags,
+    geographicPreferences,
+  ].filter((values) => !Array.isArray(values) || values.length === 0).length;
+
+  const saveProfile = async () => {
     setIsSaving(true);
     setUploadError('');
     setSuccessMessage('');
+    setShowMatchmakingWarning(false);
 
     try {
       const response = await fetch('http://127.0.0.1:8000/api/profile/save/', {
@@ -271,11 +384,20 @@ function ProfilePage() {
 
       setSuccessMessage(data.message || 'Capability profile saved successfully.');
       setEditing(true);
-    } catch (error) {
+    } catch {
       setUploadError('Could not connect to the server.');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSaveProfile = () => {
+    if (countEmptyMatchmakingFields() >= 2) {
+      setShowMatchmakingWarning(true);
+      return;
+    }
+
+    saveProfile();
   };
 
   const handleConnectMailbox = (email, provider) => {
@@ -354,7 +476,7 @@ function ProfilePage() {
       setLinkedEmailInput('');
       setLinkedEmailLabel('');
       setSuccessMessage(data.message || 'Email added successfully.');
-    } catch (error) {
+    } catch {
       setUploadError('Could not connect to the server.');
     } finally {
       setIsSavingLinkedEmail(false);
@@ -383,7 +505,7 @@ function ProfilePage() {
 
       setLinkedEmails((currentEmails) => currentEmails.filter((email) => email.id !== emailId));
       setSuccessMessage(data.message || 'Email removed successfully.');
-    } catch (error) {
+    } catch {
       setUploadError('Could not connect to the server.');
     } finally {
       setRemovingLinkedEmailId(null);
@@ -646,6 +768,50 @@ function ProfilePage() {
               </div>
             </section>
 
+            <section className="profile-section-card">
+              <h2 className="profile-section-title">Matchmaking Preferences</h2>
+              <p className="profile-section-description">
+                These structured selections improve AI match percentages by giving the system cleaner signals to compare against contracts.
+              </p>
+              <div className="profile-form-grid">
+                <MatchmakingMultiSelect
+                  label="Services Offered"
+                  helperText="Select the main services your organization can deliver."
+                  options={SERVICES_OFFERED_OPTIONS}
+                  value={servicesOffered}
+                  onChange={setServicesOffered}
+                />
+                <MatchmakingMultiSelect
+                  label="Target Industries"
+                  helperText="Select the sectors where your work is strongest."
+                  options={TARGET_INDUSTRY_OPTIONS}
+                  value={targetIndustries}
+                  onChange={setTargetIndustries}
+                />
+                <MatchmakingMultiSelect
+                  label="Preferred Opportunity Types"
+                  helperText="Select the contract or funding formats you want prioritized."
+                  options={OPPORTUNITY_TYPE_OPTIONS}
+                  value={preferredOpportunityTypes}
+                  onChange={setPreferredOpportunityTypes}
+                />
+                <MatchmakingMultiSelect
+                  label="Matchmaking Tags"
+                  helperText="Select specific keywords that describe high-fit work."
+                  options={MATCHMAKING_TAG_OPTIONS}
+                  value={matchmakingTags}
+                  onChange={setMatchmakingTags}
+                />
+                <MatchmakingMultiSelect
+                  label="Geographic Preferences"
+                  helperText="Select locations or delivery modes that fit your team."
+                  options={GEOGRAPHIC_PREFERENCE_OPTIONS}
+                  value={geographicPreferences}
+                  onChange={setGeographicPreferences}
+                />
+              </div>
+            </section>
+
             {extractedText && (
               <section className="profile-section-card">
                 <h2 className="profile-section-title">Extracted Text</h2>
@@ -675,6 +841,23 @@ function ProfilePage() {
               </button>
               <button className="profile-dark-button" type="button" onClick={handleExtractPrefill} disabled={isUploading}>
                 {isUploading ? 'Processing...' : 'Extract and Prefill'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMatchmakingWarning && (
+        <div className="profile-modal-overlay">
+          <div className="profile-modal profile-warning-modal">
+            <h3 className="profile-modal-title">Complete Matchmaking Details</h3>
+            <p className="profile-modal-warning-text">{MATCHMAKING_DETAIL_WARNING}</p>
+            <div className="profile-modal-actions">
+              <button className="profile-light-button" type="button" onClick={() => setShowMatchmakingWarning(false)}>
+                Go Back and Complete Profile
+              </button>
+              <button className="profile-dark-button" type="button" onClick={saveProfile} disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save Anyway'}
               </button>
             </div>
           </div>

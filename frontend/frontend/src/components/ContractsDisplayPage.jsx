@@ -174,6 +174,12 @@ function formatWorkflowStatus(status) {
   return WORKFLOW_STATUS_LABELS[normalizedStatus] || normalizedStatus.replace(/_/g, ' ');
 }
 
+function formatBreakdownLabel(key) {
+  return String(key || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function formatLastSynced() {
   return new Date().toLocaleString('en-US', {
     month: 'long',
@@ -729,6 +735,16 @@ function ContractsDisplayPage({ workspaceType }) {
                   {filteredOpportunities.map((opportunity) => {
                     const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
                     const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
+                    const showMatchDetails = workspaceType === 'matchmaking' && Number.isFinite(opportunity.match_percentage);
+                    const strongestAlignment = Array.isArray(opportunity.strongest_alignment)
+                      ? opportunity.strongest_alignment.filter(Boolean)
+                      : [];
+                    const weakAlignment = Array.isArray(opportunity.weak_alignment)
+                      ? opportunity.weak_alignment.filter(Boolean)
+                      : [];
+                    const matchBreakdown = opportunity.match_breakdown && typeof opportunity.match_breakdown === 'object'
+                      ? opportunity.match_breakdown
+                      : null;
 
                     return (
                       <div
@@ -740,6 +756,11 @@ function ContractsDisplayPage({ workspaceType }) {
                           <div className="card-heading-copy">
                             <div className="title-row">
                               <h3>{opportunity.title}</h3>
+                              {showMatchDetails && (
+                                <span className="match-percentage-badge">
+                                  {opportunity.match_percentage}% match
+                                </span>
+                              )}
                               <span
                                 className="summary-button"
                                 onMouseEnter={() => setHoveredId(opportunity.id)}
@@ -751,6 +772,38 @@ function ContractsDisplayPage({ workspaceType }) {
                             {hoveredId === opportunity.id && (
                               <div className="summary-popup">
                                 {opportunity.description || 'No summary available.'}
+                              </div>
+                            )}
+                            {showMatchDetails && (
+                              <div className="match-insights">
+                                {strongestAlignment.length > 0 && (
+                                  <div className="match-chip-row">
+                                    {strongestAlignment.map((label) => (
+                                      <span className="alignment-chip alignment-chip-strong" key={label}>
+                                        {label}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {weakAlignment.length > 0 && (
+                                  <div className="match-chip-row match-chip-row-weak">
+                                    {weakAlignment.map((label) => (
+                                      <span className="alignment-chip alignment-chip-weak" key={label}>
+                                        {label}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {matchBreakdown && (
+                                  <div className="match-breakdown-row" aria-label="Match breakdown">
+                                    {Object.entries(matchBreakdown).map(([key, value]) => (
+                                      <span className="match-breakdown-item" key={key}>
+                                        <span>{formatBreakdownLabel(key)}</span>
+                                        <strong>{value}</strong>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             )}
                             {(hasProgressTag || hasWorkflowTag) && (

@@ -13,6 +13,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from rest_framework.views import APIView
 from accounts.models import CapabilityProfile, User
+from accounts.profile_options import MATCHMAKING_OPTION_FIELDS
 from contracts.models import Contract, NAICSCode, UserContractProgress
 from contracts.management.services.naics_utils import get_category_for_naics
 from core.services.capability_extraction import (
@@ -51,7 +52,31 @@ PROFILE_KEYS = [
     'website',
 ]
 
+MATCHMAKING_PROFILE_KEYS = list(MATCHMAKING_OPTION_FIELDS.keys())
+
 SUPPORTED_DOCUMENT_MESSAGE = 'Please upload a PDF, PNG, JPG, or JPEG file.'
+
+
+def normalize_profile_option_list(value, allowed_options):
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, list):
+        values = value
+    else:
+        return []
+
+    allowed_lookup = {option.lower(): option for option in allowed_options}
+    normalized_values = []
+    for raw_value in values:
+        normalized_key = str(raw_value or '').strip().lower()
+        allowed_value = allowed_lookup.get(normalized_key)
+        if allowed_value and allowed_value not in normalized_values:
+            normalized_values.append(allowed_value)
+
+    return normalized_values
 
 
 def normalize_contract_status(value):
@@ -183,6 +208,11 @@ def save_capability_profile(request):
         key: request.data.get(key, '')
         for key in PROFILE_KEYS
     }
+    for key, allowed_options in MATCHMAKING_OPTION_FIELDS.items():
+        capability_data[key] = normalize_profile_option_list(
+            request.data.get(key),
+            allowed_options,
+        )
 
     # remove many-to-many field first
     naics_codes = capability_data.pop("naics_codes", [])
@@ -234,7 +264,10 @@ def get_capability_profile(request):
                 'success': True,
                 'editing': False,
                 'processed_file_name': None,
-                'profile': {key: '' for key in PROFILE_KEYS},
+                'profile': {
+                    **{key: '' for key in PROFILE_KEYS},
+                    **{key: [] for key in MATCHMAKING_PROFILE_KEYS},
+                },
             },
             status=status.HTTP_200_OK,
         )
@@ -247,6 +280,9 @@ def get_capability_profile(request):
     profile_data["naics_codes"] = list(
         profile.naics_codes.values_list("code", flat=True)
     )
+    for key in MATCHMAKING_PROFILE_KEYS:
+        value = getattr(profile, key, [])
+        profile_data[key] = value if isinstance(value, list) else []
 
     processed_file_name = None
     if hasattr(profile, 'source_pdf') and profile.source_pdf:
@@ -357,6 +393,10 @@ class OpportunityListView(APIView):
                 item['contract'].id: {
                     'match_score': item['match_score'],
                     'match_reasons': item['match_reasons'],
+                    'match_percentage': item['match_percentage'],
+                    'strongest_alignment': item['strongest_alignment'],
+                    'weak_alignment': item['weak_alignment'],
+                    'match_breakdown': item['match_breakdown'],
                 }
                 for item in matched_contracts
             }
