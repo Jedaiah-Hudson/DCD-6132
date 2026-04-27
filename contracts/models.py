@@ -50,6 +50,14 @@ class UserContractProgress(models.Model):
         DRAFTING = "DRAFTING", "Drafting"
         SUBMITTED = "SUBMITTED", "Submitted"
 
+    class RelationshipChoices(models.TextChoices):
+        UNASSIGNED = "UNASSIGNED", "Unassigned"
+        PRIME = "PRIME", "Prime"
+        SUBCONTRACTOR = "SUBCONTRACTOR", "Sub"
+        TEAMING = "TEAMING", "Teaming"
+        VENDOR = "VENDOR", "Vendor"
+        CONSULTANT = "CONSULTANT", "Consultant"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -72,6 +80,12 @@ class UserContractProgress(models.Model):
         max_length=20,
         choices=WorkflowChoices.choices,
         default="NOT_STARTED"
+    )
+
+    relationship_label = models.CharField(
+        max_length=20,
+        choices=RelationshipChoices.choices,
+        default=RelationshipChoices.UNASSIGNED
     )
     notes = models.TextField(blank=True)
 
