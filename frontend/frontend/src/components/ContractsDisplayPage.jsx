@@ -887,6 +887,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     {paginatedOpportunities.map((opportunity) => {
                       const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
                       const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
+                      const hasRelationshipTag = opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED';
 
                       return (
                         <div
@@ -894,7 +895,7 @@ function ContractsDisplayPage({ workspaceType }) {
                           className="contract-card"
                           data-contract-id={opportunity.id}
                         >
-                          <div className={`card-heading-row ${(hasProgressTag || hasWorkflowTag) ? 'card-heading-row-with-tags' : 'card-heading-row-no-tags'}`}>
+                          <div className={`card-heading-row ${(hasProgressTag || hasWorkflowTag || hasRelationshipTag) ? 'card-heading-row-with-tags' : 'card-heading-row-no-tags'}`}>
                             <div className="card-heading-copy">
                               <div className="title-row">
                                 <h3>{opportunity.title}</h3>
@@ -911,7 +912,7 @@ function ContractsDisplayPage({ workspaceType }) {
                                   {opportunity.description || 'No summary available.'}
                                 </div>
                               )}
-                              {(hasProgressTag || hasWorkflowTag) && (
+                              {(hasProgressTag || hasWorkflowTag || hasRelationshipTag) && (
                                 <div className="tracking-tag-row">
                                   {hasProgressTag && (
                                     <span className={getProgressStatusClass(opportunity.contract_progress)}>
@@ -921,6 +922,11 @@ function ContractsDisplayPage({ workspaceType }) {
                                   {hasWorkflowTag && (
                                     <span className={getWorkflowStatusClass(opportunity.workflow_status)}>
                                       {formatWorkflowStatus(opportunity.workflow_status)}
+                                    </span>
+                                  )}
+                                  {hasRelationshipTag && (
+                                    <span className={getRelationshipLabelClass(opportunity.relationship_label)}>
+                                      {formatRelationshipLabel(opportunity.relationship_label)}
                                     </span>
                                   )}
                                 </div>
@@ -945,6 +951,10 @@ function ContractsDisplayPage({ workspaceType }) {
                               )}
                             </div>
                           </div>
+
+                          <p className="contract-description-preview">
+                            {opportunity.description || 'No description available.'}
+                          </p>
 
                           <p>
                             <strong>Agency:</strong>{' '}
