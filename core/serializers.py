@@ -24,3 +24,16 @@ class OpportunitySerializer(serializers.Serializer):
         child=serializers.CharField(),
         required=False,
     )
+    match_percentage = serializers.IntegerField(required=False)
+    strongest_alignment = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )
+    weak_alignment = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+    )
+    match_breakdown = serializers.DictField(
+        child=serializers.IntegerField(),
+        required=False,
+    )

@@ -214,6 +214,12 @@
     font-weight: 600;
     color: var(--pinkstem-text);
   }
+
+  .profile-field-helper {
+    margin: -4px 0 10px;
+    color: var(--pinkstem-muted);
+    font-size: 0.92rem;
+  }
   
   .profile-input,
   .profile-textarea {
@@ -330,6 +336,50 @@
     display: flex;
     gap: 12px;
     justify-content: center;
+  }
+
+  .profile-warning-modal {
+    max-width: 560px;
+  }
+
+  .profile-modal-warning-text {
+    color: var(--pinkstem-text);
+    line-height: 1.55;
+    margin: 0 0 20px;
+  }
+
+  .profile-match-select__control {
+    min-height: 48px;
+    border-color: var(--pinkstem-border) !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+  }
+
+  .profile-match-select__control--is-focused {
+    border-color: var(--pinkstem-accent) !important;
+    box-shadow: 0 0 0 3px rgba(77, 145, 179, 0.18) !important;
+  }
+
+  .profile-match-select__multi-value {
+    border-radius: 999px !important;
+    background-color: #eef7fb !important;
+    border: 1px solid #c7deea !important;
+  }
+
+  .profile-match-select__multi-value__label {
+    color: #285b73 !important;
+    font-weight: 600;
+    padding: 5px 8px !important;
+  }
+
+  .profile-match-select__multi-value__remove {
+    border-radius: 999px !important;
+    color: #285b73 !important;
+  }
+
+  .profile-match-select__multi-value__remove:hover {
+    background-color: #dcedf6 !important;
+    color: #1f4f66 !important;
   }
 
   .profile-error-message {

@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from accounts.models import CapabilityProfile, User
@@ -12,7 +13,7 @@ from core.services.capability_extraction import (
     extract_text_from_capability_document,
     parse_capability_text,
 )
-from core.services.matchmaking import get_matched_contracts_for_user, get_user_matchmaking_profile
+from core.services.matchmaking import _EMBEDDING_CACHE, get_matched_contracts_for_user, get_user_matchmaking_profile
 from contracts.models import Contract, DismissedContract, NAICSCode
 
 
@@ -386,9 +387,98 @@ Secondary: $41512, 541519, 541611, 541990
         )
         self.assertTrue(NAICSCode.objects.filter(code='541990').exists())
 
+    def test_capability_profile_has_structured_matchmaking_fields(self):
+        profile = CapabilityProfile.objects.create(user=self.user, company_name='Structured Co')
+
+        self.assertEqual(profile.services_offered, [])
+        self.assertEqual(profile.target_industries, [])
+        self.assertEqual(profile.preferred_opportunity_types, [])
+        self.assertEqual(profile.matchmaking_tags, [])
+        self.assertEqual(profile.geographic_preferences, [])
+
+    def test_profile_save_accepts_and_loads_valid_structured_matchmaking_values(self):
+        response = self.client.post(
+            '/api/profile/save/',
+            {
+                'company_name': 'Structured Match Co',
+                'services_offered': ['Software Development', 'Cybersecurity'],
+                'target_industries': ['Government', 'Technology'],
+                'preferred_opportunity_types': ['Subcontract', 'Technical Services'],
+                'matchmaking_tags': ['Data Dashboards', 'Cloud Migration'],
+                'geographic_preferences': ['Georgia', 'Remote'],
+            },
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        profile = CapabilityProfile.objects.get(user=self.user)
+        self.assertEqual(profile.services_offered, ['Software Development', 'Cybersecurity'])
+        self.assertEqual(profile.target_industries, ['Government', 'Technology'])
+        self.assertEqual(profile.preferred_opportunity_types, ['Subcontract', 'Technical Services'])
+        self.assertEqual(profile.matchmaking_tags, ['Data Dashboards', 'Cloud Migration'])
+        self.assertEqual(profile.geographic_preferences, ['Georgia', 'Remote'])
+
+        load_response = self.client.get('/api/profile/', **self.auth_headers)
+
+        self.assertEqual(load_response.status_code, 200)
+        loaded_profile = load_response.data['profile']
+        self.assertEqual(loaded_profile['services_offered'], ['Software Development', 'Cybersecurity'])
+        self.assertEqual(loaded_profile['target_industries'], ['Government', 'Technology'])
+        self.assertEqual(loaded_profile['preferred_opportunity_types'], ['Subcontract', 'Technical Services'])
+        self.assertEqual(loaded_profile['matchmaking_tags'], ['Data Dashboards', 'Cloud Migration'])
+        self.assertEqual(loaded_profile['geographic_preferences'], ['Georgia', 'Remote'])
+
+    def test_profile_save_ignores_invalid_structured_matchmaking_values(self):
+        response = self.client.post(
+            '/api/profile/save/',
+            {
+                'company_name': 'Invalid Options Co',
+                'services_offered': ['Software Development', 'Invalid Service'],
+                'target_industries': None,
+                'preferred_opportunity_types': ['Bad Type'],
+                'matchmaking_tags': ['AI', 'Not Allowed'],
+                'geographic_preferences': 'Remote',
+            },
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        profile = CapabilityProfile.objects.get(user=self.user)
+        self.assertEqual(profile.services_offered, ['Software Development'])
+        self.assertEqual(profile.target_industries, [])
+        self.assertEqual(profile.preferred_opportunity_types, [])
+        self.assertEqual(profile.matchmaking_tags, ['AI'])
+        self.assertEqual(profile.geographic_preferences, ['Remote'])
+
+    def test_profile_load_defaults_missing_structured_matchmaking_fields_to_empty_lists(self):
+        response = self.client.post(
+            '/api/profile/save/',
+            {'company_name': 'Defaults Co'},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        load_response = self.client.get('/api/profile/', **self.auth_headers)
+
+        self.assertEqual(load_response.status_code, 200)
+        loaded_profile = load_response.data['profile']
+        self.assertEqual(loaded_profile['services_offered'], [])
+        self.assertEqual(loaded_profile['target_industries'], [])
+        self.assertEqual(loaded_profile['preferred_opportunity_types'], [])
+        self.assertEqual(loaded_profile['matchmaking_tags'], [])
+        self.assertEqual(loaded_profile['geographic_preferences'], [])
+
 
 class OpportunityApiTests(APITestCase):
     def setUp(self):
+        self.env_patcher = patch.dict('os.environ', {'OPENAI_API_KEY': ''})
+        self.env_patcher.start()
+        self.addCleanup(self.env_patcher.stop)
+        _EMBEDDING_CACHE.clear()
+
         self.user = User.objects.create_user(
             email='matcher@example.com',
             password='StrongPass123!',
@@ -567,6 +657,32 @@ class OpportunityApiTests(APITestCase):
         self.assertTrue(all(item['naics_code'] == '541330' for item in response.data))
         self.assertTrue(all(item['match_score'] > 0 for item in response.data))
         self.assertTrue(all(item['match_reasons'] for item in response.data))
+        self.assertTrue(all(0 <= item['match_percentage'] <= 100 for item in response.data))
+
+    def test_match_user_returns_structured_match_metadata(self):
+        naics_code = NAICSCode.objects.create(code='541330', title='Engineering Services')
+        profile = CapabilityProfile.objects.create(
+            user=self.user,
+            company_name='Cloud Security Co',
+            core_competencies='cloud cybersecurity compliance',
+            certifications='ISO 27001',
+        )
+        profile.naics_codes.set([naics_code])
+
+        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.data), 1)
+        first_match = response.data[0]
+        self.assertIn('match_percentage', first_match)
+        self.assertGreaterEqual(first_match['match_percentage'], 0)
+        self.assertLessEqual(first_match['match_percentage'], 100)
+        self.assertIsInstance(first_match['strongest_alignment'], list)
+        self.assertIsInstance(first_match['weak_alignment'], list)
+        self.assertEqual(
+            set(first_match['match_breakdown'].keys()),
+            {'embedding', 'naics', 'capabilities', 'certifications', 'timeline'},
+        )
 
     def test_authenticated_opportunities_exclude_dismissed_contracts(self):
         dismissed_contract = Contract.objects.get(title='Cybersecurity Support Services')
@@ -584,6 +700,30 @@ class OpportunityApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_match_user_still_works_when_openai_api_key_is_missing(self):
+        naics_code = NAICSCode.objects.create(code='541330', title='Engineering Services')
+        profile = CapabilityProfile.objects.create(user=self.user, company_name='Match Co')
+        profile.naics_codes.set([naics_code])
+
+        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.data), 1)
+        self.assertTrue(all(item['match_breakdown']['embedding'] == 0 for item in response.data))
+
+    def test_match_user_still_works_when_embedding_call_fails(self):
+        naics_code = NAICSCode.objects.create(code='541330', title='Engineering Services')
+        profile = CapabilityProfile.objects.create(user=self.user, company_name='Match Co')
+        profile.naics_codes.set([naics_code])
+
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
+            with patch('core.services.matchmaking.OpenAI', side_effect=RuntimeError('embedding unavailable')):
+                response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(len(response.data), 1)
+        self.assertTrue(all(item['match_breakdown']['embedding'] == 0 for item in response.data))
+
     def test_get_user_matchmaking_profile_returns_normalized_profile_data(self):
         naics_code = NAICSCode.objects.create(code='541512', title='Computer Systems Design Services')
         profile = CapabilityProfile.objects.create(
@@ -594,6 +734,11 @@ class OpportunityApiTests(APITestCase):
             differentiators='Rapid delivery for federal agencies',
             certifications='ISO 27001',
             past_performance='Delivered cloud migration support for VA.',
+            services_offered=['Cloud Services', 'Cybersecurity'],
+            target_industries=['Government'],
+            preferred_opportunity_types=['Technical Services'],
+            matchmaking_tags=['Cloud Migration', 'Compliance'],
+            geographic_preferences=['Georgia'],
         )
         profile.naics_codes.set([naics_code])
 
@@ -605,6 +750,10 @@ class OpportunityApiTests(APITestCase):
         self.assertEqual(normalized['naics_codes'], ['541512'])
         self.assertIn('cloud', normalized['keywords'])
         self.assertIn('iso', normalized['certification_keywords'])
+        self.assertEqual(normalized['services_offered'], ['Cloud Services', 'Cybersecurity'])
+        self.assertIn('Services Offered: Cloud Services, Cybersecurity', normalized['profile_text'])
+        self.assertIn('Target Industries: Government', normalized['profile_text'])
+        self.assertIn('Geographic Preferences: Georgia', normalized['profile_text'])
 
     def test_get_user_matchmaking_profile_handles_missing_and_incomplete_profile(self):
         missing = get_user_matchmaking_profile(self.user)
@@ -632,6 +781,116 @@ class OpportunityApiTests(APITestCase):
         self.assertEqual(response.data[0]['title'], 'Cloud Engineering Contract')
         self.assertGreater(response.data[0]['match_score'], response.data[1]['match_score'])
         self.assertIn('Keyword overlap with profile capabilities', response.data[0]['match_reasons'])
+
+    def test_exact_naics_match_increases_score(self):
+        matching_naics = NAICSCode.objects.create(code='541330', title='Engineering Services')
+        Contract.objects.create(
+            source='procurement',
+            title='General Delivery Advisory',
+            summary='General delivery planning support.',
+            naics_code='541611',
+            agency='GSA',
+            status='Active',
+            partner_name='Advisory Partners',
+        )
+        CapabilityProfile.objects.create(
+            user=self.user,
+            company_name='Engineering Co',
+            core_competencies='general delivery',
+        ).naics_codes.set([matching_naics])
+
+        response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        matched_naics_scores = [
+            item['match_percentage']
+            for item in response.data
+            if item['naics_code'] == '541330'
+        ]
+        other_scores = [
+            item['match_percentage']
+            for item in response.data
+            if item['naics_code'] != '541330'
+        ]
+        self.assertTrue(matched_naics_scores)
+        self.assertTrue(other_scores)
+        self.assertGreater(min(matched_naics_scores), max(other_scores))
+
+    def test_embedding_score_can_contribute_without_exact_keyword_match(self):
+        Contract.objects.all().delete()
+        Contract.objects.create(
+            source='procurement',
+            title='Predictive Decision Platform',
+            summary='Statistical modeling for public sector planning.',
+            naics_code='541611',
+            agency='HHS',
+            status='Active',
+            partner_name='Insight Labs',
+            category='management',
+        )
+        CapabilityProfile.objects.create(
+            user=self.user,
+            company_name='Semantic Co',
+            core_competencies='machine learning analytics',
+        )
+
+        def mock_embedding_create(model, input):
+            text = input.lower()
+            if 'machine learning analytics' in text or 'predictive decision platform' in text:
+                embedding = [1.0, 0.0, 0.0]
+            else:
+                embedding = [0.0, 1.0, 0.0]
+            return SimpleNamespace(data=[SimpleNamespace(embedding=embedding)])
+
+        mock_client = SimpleNamespace(
+            embeddings=SimpleNamespace(create=mock_embedding_create)
+        )
+
+        with patch.dict('os.environ', {'OPENAI_API_KEY': 'test-key'}):
+            with patch('core.services.matchmaking.OpenAI', return_value=mock_client):
+                response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertGreater(response.data[0]['match_breakdown']['embedding'], 0)
+        self.assertIn('Semantic capability match', response.data[0]['strongest_alignment'])
+
+    def test_structured_matchmaking_fields_can_increase_match_percentage_and_labels(self):
+        Contract.objects.all().delete()
+        Contract.objects.create(
+            source='procurement',
+            title='Georgia Government Software Development Dashboard Project',
+            summary='Subcontract technical services for application development and data dashboards in Atlanta, Georgia.',
+            naics_code='541511',
+            agency='Georgia Technology Authority',
+            status='Active',
+            partner_name='Public Sector Prime',
+            category='technology',
+        )
+        profile = CapabilityProfile.objects.create(
+            user=self.user,
+            company_name='Structured Match Co',
+            core_competencies='dashboard delivery',
+        )
+
+        baseline_response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        baseline_score = baseline_response.data[0]['match_percentage']
+
+        profile.services_offered = ['Software Development']
+        profile.target_industries = ['Government', 'Technology']
+        profile.preferred_opportunity_types = ['Subcontract', 'Technical Services']
+        profile.matchmaking_tags = ['Data Dashboards', 'Application Development']
+        profile.geographic_preferences = ['Georgia']
+        profile.save()
+
+        enriched_response = self.client.get('/api/opportunities/?match_user=true', **self.auth_headers)
+        enriched_match = enriched_response.data[0]
+
+        self.assertGreater(enriched_match['match_percentage'], baseline_score)
+        self.assertIn('Service match: Software Development', enriched_match['strongest_alignment'])
+        self.assertIn('Industry match: Government', enriched_match['strongest_alignment'])
+        self.assertIn('Tag match: Application Development', enriched_match['strongest_alignment'])
+        self.assertIn('Geographic match: Georgia', enriched_match['strongest_alignment'])
 
     def test_text_only_profile_can_return_text_based_matches(self):
         CapabilityProfile.objects.create(

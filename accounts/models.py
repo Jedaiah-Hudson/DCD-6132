@@ -180,6 +180,11 @@ class CapabilityProfile(models.Model):
     
     certifications = models.TextField(blank=True)
     past_performance = models.TextField(blank=True)
+    services_offered = models.JSONField(default=list, blank=True)
+    target_industries = models.JSONField(default=list, blank=True)
+    preferred_opportunity_types = models.JSONField(default=list, blank=True)
+    matchmaking_tags = models.JSONField(default=list, blank=True)
+    geographic_preferences = models.JSONField(default=list, blank=True)
     contact_name = models.CharField(max_length=255, blank=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=50, blank=True)
