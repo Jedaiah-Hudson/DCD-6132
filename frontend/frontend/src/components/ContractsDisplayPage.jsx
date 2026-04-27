@@ -5,6 +5,7 @@ import useNotificationSummary from '../hooks/useNotificationSummary';
 
 const OPPORTUNITIES_API_URL = 'http://127.0.0.1:8000/api/opportunities/';
 const PROGRESS_SUMMARY_API_URL = 'http://127.0.0.1:8000/api/contract-progress/summary/';
+
 const LISTING_STATUS_COLORS = {
   active: 'green',
   inactive: 'gray',
@@ -13,18 +14,21 @@ const LISTING_STATUS_COLORS = {
   drafting: 'blue',
   submitted: 'green',
 };
+
 const PROGRESS_STATUS_COLORS = {
   NONE: 'gray',
   PENDING: 'amber',
   WON: 'green',
   LOST: 'red',
 };
+
 const WORKFLOW_STATUS_COLORS = {
   NOT_STARTED: 'gray',
   REVIEWING: 'amber',
   DRAFTING: 'blue',
   SUBMITTED: 'green',
 };
+
 const RELATIONSHIP_LABEL_COLORS = {
   UNASSIGNED: 'gray',
   PRIME: 'green',
@@ -33,18 +37,21 @@ const RELATIONSHIP_LABEL_COLORS = {
   VENDOR: 'amber',
   CONSULTANT: 'teal',
 };
+
 const PROGRESS_STATUS_LABELS = {
   NONE: 'Not tracked',
   PENDING: 'Pending',
   WON: 'Won',
   LOST: 'Lost',
 };
+
 const WORKFLOW_STATUS_LABELS = {
   NOT_STARTED: 'Not Started',
   REVIEWING: 'Reviewing',
   DRAFTING: 'Drafting',
   SUBMITTED: 'Submitted',
 };
+
 const RELATIONSHIP_LABELS = {
   UNASSIGNED: 'Unassigned',
   PRIME: 'Prime',
@@ -53,6 +60,7 @@ const RELATIONSHIP_LABELS = {
   VENDOR: 'Vendor',
   CONSULTANT: 'Consultant',
 };
+
 const NAICS_CATEGORY_COLORS = {
   agriculture: 'green',
   mining_energy: 'amber',
@@ -101,10 +109,10 @@ const NAICS_CATEGORY_COLORS = {
   research_development: 'purple',
   other: 'gray',
 };
+
 const DISMISSED_STORAGE_KEY = 'dismissedDashboardOpportunities';
 const RECENTLY_VIEWED_STORAGE_KEY = 'recentlyViewedContractsByWorkspace';
 const MAX_RECENTLY_VIEWED = 8;
-
 const CONTRACTS_PER_PAGE = 10;
 
 const WORKSPACE_CONFIG = {
@@ -205,12 +213,6 @@ function formatProgressStatus(status) {
 function formatWorkflowStatus(status) {
   const normalizedStatus = String(status || 'NOT_STARTED').trim().toUpperCase();
   return WORKFLOW_STATUS_LABELS[normalizedStatus] || normalizedStatus.replace(/_/g, ' ');
-}
-
-function formatBreakdownLabel(key) {
-  return String(key || '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function formatRelationshipLabel(label) {
@@ -387,7 +389,7 @@ function ContractsDisplayPage({ workspaceType }) {
         const data = await fetchOpportunities(
           controller.signal,
           token,
-          { matchUser: workspaceType === 'matchmaking' }
+          { matchUser: workspaceType === 'matchmaking' },
         );
         setAllOpportunities(data);
 
@@ -406,7 +408,7 @@ function ContractsDisplayPage({ workspaceType }) {
         setError(
           isNetworkError
             ? 'Could not connect to the server.'
-            : fetchError.message || 'Failed to load opportunities.'
+            : fetchError.message || 'Failed to load opportunities.',
         );
         setAllOpportunities([]);
       } finally {
@@ -445,32 +447,32 @@ function ContractsDisplayPage({ workspaceType }) {
     new Set(
       workspaceOpportunities
         .map((opportunity) => opportunity.agency)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
   const partnerOptions = useMemo(() => Array.from(
     new Set(
       workspaceOpportunities
         .map((opportunity) => opportunity.partner)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
   const naicsOptions = useMemo(() => Array.from(
     new Set(
       workspaceOpportunities
         .map((opportunity) => opportunity.naics_code)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   ).sort(), [workspaceOpportunities]);
 
   const statusOptions = useMemo(() => Array.from(
     new Set(
       workspaceOpportunities
         .map((opportunity) => opportunity.status)
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   ).sort((left, right) => left.localeCompare(right)), [workspaceOpportunities]);
 
   const filteredOpportunities = useMemo(() => {
@@ -569,7 +571,7 @@ function ContractsDisplayPage({ workspaceType }) {
 
     window.requestAnimationFrame(() => {
       const contractCard = document.querySelector(
-        `[data-contract-id="${restoreWorkspaceState.contractId}"]`
+        `[data-contract-id="${restoreWorkspaceState.contractId}"]`,
       );
 
       if (contractCard) {
@@ -624,15 +626,18 @@ function ContractsDisplayPage({ workspaceType }) {
       const summaryPromise = config.showSummary
         ? fetchProgressSummary(undefined, token)
         : Promise.resolve(progressSummary);
+
       const [catalogData, summaryData] = await Promise.all([
         fetchOpportunities(undefined, token, { matchUser: workspaceType === 'matchmaking' }),
         summaryPromise,
       ]);
 
       setAllOpportunities(catalogData);
+
       if (config.showSummary) {
         setProgressSummary(summaryData);
       }
+
       setLastSynced(formatLastSynced());
     } catch (fetchError) {
       const isNetworkError = fetchError instanceof TypeError;
@@ -640,7 +645,7 @@ function ContractsDisplayPage({ workspaceType }) {
       setError(
         isNetworkError
           ? 'Could not connect to the server.'
-          : fetchError.message || 'Sync failed.'
+          : fetchError.message || 'Sync failed.',
       );
     } finally {
       setIsSyncing(false);
@@ -649,7 +654,7 @@ function ContractsDisplayPage({ workspaceType }) {
 
   const handleDismissOpportunity = (opportunityId) => {
     const confirmed = window.confirm(
-      'Are you sure you want to mark this contract as not interested and remove it from this page? You cannot undo this.'
+      'Are you sure you want to mark this contract as not interested and remove it from this page? You cannot undo this.',
     );
 
     if (!confirmed) {
@@ -675,21 +680,25 @@ function ContractsDisplayPage({ workspaceType }) {
           >
             Dashboard
           </button>
+
           <button
             className={`sidebar-link ${config.activeNav === 'matchmaking' ? 'active' : ''}`}
             onClick={() => navigate('/ai-matchmaking')}
           >
             AI Matchmaking
           </button>
+
           <button
             className={`sidebar-link ${config.activeNav === 'my-contracts' ? 'active' : ''}`}
             onClick={() => navigate('/my-contracts')}
           >
             My Contracts
           </button>
+
           <button className="sidebar-link" onClick={() => navigate('/profile')}>
             Profile
           </button>
+
           <button className="sidebar-link" onClick={() => navigate('/notifications')}>
             <span className="sidebar-link-content">
               <span>Notifications</span>
@@ -735,14 +744,17 @@ function ContractsDisplayPage({ workspaceType }) {
                   <span className="progress-summary-label">Tracked</span>
                   <strong>{progressSummary.tracked}</strong>
                 </div>
+
                 <div className="progress-summary-card">
                   <span className="progress-summary-label">Pending</span>
                   <strong>{progressSummary.pending}</strong>
                 </div>
+
                 <div className="progress-summary-card">
                   <span className="progress-summary-label">Won</span>
                   <strong>{progressSummary.won}</strong>
                 </div>
+
                 <div className="progress-summary-card">
                   <span className="progress-summary-label">Lost</span>
                   <strong>{progressSummary.lost}</strong>
@@ -755,8 +767,11 @@ function ContractsDisplayPage({ workspaceType }) {
                 <div className="sync-header-row">
                   <div>
                     <h2 className="section-title">Contract Sync</h2>
-                    <p className="section-helper-text">Load the latest backend opportunities and refresh the dashboard.</p>
+                    <p className="section-helper-text">
+                      Load the latest backend opportunities and refresh the dashboard.
+                    </p>
                   </div>
+
                   <button
                     className="sync-button"
                     onClick={handleSyncContracts}
@@ -768,7 +783,9 @@ function ContractsDisplayPage({ workspaceType }) {
 
                 <div className="sync-feedback-row">
                   <p className="sync-meta-text">Last synced: {lastSynced}</p>
-                  {!error && !loading && <p className="sync-success-text">Showing live backend opportunities.</p>}
+                  {!error && !loading && (
+                    <p className="sync-success-text">Showing live backend opportunities.</p>
+                  )}
                 </div>
               </section>
             )}
@@ -779,6 +796,7 @@ function ContractsDisplayPage({ workspaceType }) {
                   <h2 className="section-title">{config.overviewTitle}</h2>
                   <p className="section-helper-text">{config.overviewText}</p>
                 </div>
+
                 <div className="workspace-overview-metric">
                   <span>{config.overviewMetricLabel}</span>
                   <strong>{workspaceOpportunities.length}</strong>
@@ -793,6 +811,7 @@ function ContractsDisplayPage({ workspaceType }) {
                   <p className="section-helper-text">{config.sectionHelperText}</p>
                 </div>
               </div>
+
               <div className="filters-grid">
                 <div className="filter-group filter-group-search">
                   <label htmlFor="contractsSearch" className="filter-label">
@@ -807,6 +826,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     onChange={(event) => setSearchTerm(event.target.value)}
                   />
                 </div>
+
                 <div className="filter-group">
                   <label htmlFor="agencyFilter" className="filter-label">
                     Agency
@@ -825,6 +845,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     ))}
                   </select>
                 </div>
+
                 <div className="filter-group">
                   <label htmlFor="partnerFilter" className="filter-label">
                     Partner
@@ -843,6 +864,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     ))}
                   </select>
                 </div>
+
                 <div className="filter-group">
                   <label htmlFor="naicsFilter" className="filter-label">
                     NAICS Code
@@ -861,6 +883,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     ))}
                   </select>
                 </div>
+
                 <div className="filter-group">
                   <label htmlFor="statusFilter" className="filter-label">
                     Status
@@ -894,16 +917,6 @@ function ContractsDisplayPage({ workspaceType }) {
                       const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
                       const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
                       const hasRelationshipTag = opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED';
-                      const showMatchDetails = workspaceType === 'matchmaking' && Number.isFinite(opportunity.match_percentage);
-                      const strongestAlignment = Array.isArray(opportunity.strongest_alignment)
-                        ? opportunity.strongest_alignment.filter(Boolean)
-                        : [];
-                      const weakAlignment = Array.isArray(opportunity.weak_alignment)
-                        ? opportunity.weak_alignment.filter(Boolean)
-                        : [];
-                      const matchBreakdown = opportunity.match_breakdown && typeof opportunity.match_breakdown === 'object'
-                        ? opportunity.match_breakdown
-                        : null;
 
                       return (
                         <div
@@ -915,11 +928,6 @@ function ContractsDisplayPage({ workspaceType }) {
                             <div className="card-heading-copy">
                               <div className="title-row">
                                 <h3>{opportunity.title}</h3>
-                                {showMatchDetails && (
-                                  <span className="match-percentage-badge">
-                                    {opportunity.match_percentage}% match
-                                  </span>
-                                )}
                                 <span
                                   className="summary-button"
                                   onMouseEnter={() => setHoveredId(opportunity.id)}
@@ -928,43 +936,13 @@ function ContractsDisplayPage({ workspaceType }) {
                                   View Summary
                                 </span>
                               </div>
+
                               {hoveredId === opportunity.id && (
                                 <div className="summary-popup">
                                   {opportunity.description || 'No summary available.'}
                                 </div>
                               )}
-                              {showMatchDetails && (
-                                <div className="match-insights">
-                                  {strongestAlignment.length > 0 && (
-                                    <div className="match-chip-row">
-                                      {strongestAlignment.map((label) => (
-                                        <span className="alignment-chip alignment-chip-strong" key={label}>
-                                          {label}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {weakAlignment.length > 0 && (
-                                    <div className="match-chip-row match-chip-row-weak">
-                                      {weakAlignment.map((label) => (
-                                        <span className="alignment-chip alignment-chip-weak" key={label}>
-                                          {label}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {matchBreakdown && (
-                                    <div className="match-breakdown-row" aria-label="Match breakdown">
-                                      {Object.entries(matchBreakdown).map(([key, value]) => (
-                                        <span className="match-breakdown-item" key={key}>
-                                          <span>{formatBreakdownLabel(key)}</span>
-                                          <strong>{value}</strong>
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+
                               {(hasProgressTag || hasWorkflowTag || hasRelationshipTag) && (
                                 <div className="tracking-tag-row">
                                   {hasProgressTag && (
@@ -972,11 +950,13 @@ function ContractsDisplayPage({ workspaceType }) {
                                       {formatProgressStatus(opportunity.contract_progress)}
                                     </span>
                                   )}
+
                                   {hasWorkflowTag && (
                                     <span className={getWorkflowStatusClass(opportunity.workflow_status)}>
                                       {formatWorkflowStatus(opportunity.workflow_status)}
                                     </span>
                                   )}
+
                                   {hasRelationshipTag && (
                                     <span className={getRelationshipLabelClass(opportunity.relationship_label)}>
                                       {formatRelationshipLabel(opportunity.relationship_label)}
@@ -985,6 +965,7 @@ function ContractsDisplayPage({ workspaceType }) {
                                 </div>
                               )}
                             </div>
+
                             <div className="card-action-row">
                               <button
                                 className="note-action-button"
@@ -993,6 +974,7 @@ function ContractsDisplayPage({ workspaceType }) {
                               >
                                 View Details
                               </button>
+
                               {config.allowDismiss && (
                                 <button
                                   className="note-secondary-button"
@@ -1005,18 +987,20 @@ function ContractsDisplayPage({ workspaceType }) {
                             </div>
                           </div>
 
-                          <p className="contract-description-preview">
-                            {opportunity.description || 'No description available.'}
+                          <p>
+                            <strong>Agency:</strong>{' '}
+                            <span className="info-pill agency-pill">
+                              {opportunity.agency || 'Not provided'}
+                            </span>
                           </p>
 
                           <p>
-                            <strong>Agency:</strong>{' '}
-                            <span className="info-pill agency-pill">{opportunity.agency || 'Not provided'}</span>
-                          </p>
-                          <p>
                             <strong>Partner:</strong>{' '}
-                            <span className="info-pill partner-pill">{opportunity.partner || 'Not provided'}</span>
+                            <span className="info-pill partner-pill">
+                              {opportunity.partner || 'Not provided'}
+                            </span>
                           </p>
+
                           <p>
                             <strong>NAICS Code:</strong>{' '}
                             <span
@@ -1026,6 +1010,7 @@ function ContractsDisplayPage({ workspaceType }) {
                               {opportunity.naics_code}
                             </span>
                           </p>
+
                           <p>
                             <strong>Contract Status:</strong>{' '}
                             <span className={getListingStatusClass(opportunity.status)}>
@@ -1036,11 +1021,13 @@ function ContractsDisplayPage({ workspaceType }) {
                       );
                     })}
                   </div>
+
                   <div className="pagination-row">
                     <p className="pagination-summary">
                       Showing {Math.min((currentPage - 1) * CONTRACTS_PER_PAGE + 1, filteredOpportunities.length)}-
                       {Math.min(currentPage * CONTRACTS_PER_PAGE, filteredOpportunities.length)} of {filteredOpportunities.length}
                     </p>
+
                     <div className="pagination-controls">
                       <button
                         className="pagination-button"
@@ -1050,9 +1037,11 @@ function ContractsDisplayPage({ workspaceType }) {
                       >
                         Previous
                       </button>
+
                       <span className="pagination-page-indicator">
                         Page {currentPage} of {totalPages}
                       </span>
+
                       <button
                         className="pagination-button"
                         type="button"
@@ -1076,6 +1065,7 @@ function ContractsDisplayPage({ workspaceType }) {
                       Contracts you opened with View Details show up here so you can get back to them faster.
                     </p>
                   </div>
+
                   <button
                     className="jump-section-button jump-section-button-secondary"
                     type="button"
@@ -1089,6 +1079,7 @@ function ContractsDisplayPage({ workspaceType }) {
                   <div>
                     <h2 className="section-title">{config.recentTitle}</h2>
                   </div>
+
                   <button
                     className="jump-section-button jump-section-button-secondary"
                     type="button"
@@ -1098,6 +1089,7 @@ function ContractsDisplayPage({ workspaceType }) {
                   </button>
                 </div>
               )}
+
               {bottomSectionOpportunities.length === 0 ? (
                 <div className="state-card">
                   {config.showRecentVisits
@@ -1115,6 +1107,7 @@ function ContractsDisplayPage({ workspaceType }) {
                         {config.showRecentVisits && <th>Action</th>}
                       </tr>
                     </thead>
+
                     <tbody>
                       {bottomSectionOpportunities.map((opportunity) => (
                         <tr key={opportunity.id}>
@@ -1128,6 +1121,7 @@ function ContractsDisplayPage({ workspaceType }) {
                               {opportunity.naics_code || 'Not provided'}
                             </span>
                           </td>
+
                           {config.showRecentVisits && (
                             <td>
                               <button
