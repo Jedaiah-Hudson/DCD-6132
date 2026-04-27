@@ -11,7 +11,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import CapabilityProfile, User
 from contracts.management.services.procurement_ingest import normalize_procurement_record
-from contracts.management.services.sam_api import SamApiError, fetch_sam_opportunities
+from contracts.management.services.sam_api import SamApiError, fetch_sam_opportunities, ingest_sam_opportunities
 from contracts.models import Contract, ContractNotification, DismissedContract, NAICSCode, UserContractProgress
 
 
@@ -121,6 +121,83 @@ class SamApiErrorHandlingTests(TestCase):
             str(exc.exception),
             "SAM.gov rate limit reached. Try again after 2026-Apr-17 00:00:00 UTC.",
         )
+
+    @patch("contracts.management.services.sam_api.ingest_procurement_record")
+    @patch("contracts.management.services.sam_api.fetch_sam_opportunities")
+    def test_ingest_sam_opportunities_uses_five_record_batches(self, mock_fetch, mock_ingest):
+        records = [
+            {
+                "title": f"SAM Opportunity {index}",
+                "description": f"Description {index}",
+                "uiLink": f"https://sam.gov/{index}",
+            }
+            for index in range(10)
+        ]
+        mock_fetch.side_effect = [
+            {
+                "totalRecords": 10,
+                "opportunitiesData": records[:5],
+            },
+            {
+                "totalRecords": 10,
+                "opportunitiesData": records[5:],
+            },
+        ]
+
+        def ingest_record(record, source_name):
+            contract = Contract.objects.create(
+                source=Contract.SourceType.PROCUREMENT,
+                title=record["title"],
+                summary=record["description"],
+                agency="SAM",
+                hyperlink=record["uiLink"],
+            )
+            return contract, True
+
+        mock_ingest.side_effect = ingest_record
+
+        result = ingest_sam_opportunities(limit=10)
+
+        self.assertEqual(result["count_ingested"], 10)
+        self.assertEqual(mock_fetch.call_count, 2)
+        self.assertEqual(mock_fetch.call_args_list[0].kwargs["limit"], 5)
+        self.assertEqual(mock_fetch.call_args_list[0].kwargs["offset"], 0)
+        self.assertEqual(mock_fetch.call_args_list[1].kwargs["limit"], 5)
+        self.assertEqual(mock_fetch.call_args_list[1].kwargs["offset"], 5)
+
+    @patch("contracts.management.services.sam_api.ingest_procurement_record")
+    @patch("contracts.management.services.sam_api.fetch_sam_opportunities")
+    def test_ingest_sam_opportunities_uses_one_partial_batch_for_small_limit(self, mock_fetch, mock_ingest):
+        records = [
+            {
+                "title": f"SAM Opportunity {index}",
+                "description": f"Description {index}",
+                "uiLink": f"https://sam.gov/{index}",
+            }
+            for index in range(3)
+        ]
+        mock_fetch.return_value = {
+            "totalRecords": 10,
+            "opportunitiesData": records,
+        }
+
+        def ingest_record(record, source_name):
+            contract = Contract.objects.create(
+                source=Contract.SourceType.PROCUREMENT,
+                title=record["title"],
+                summary=record["description"],
+                agency="SAM",
+                hyperlink=record["uiLink"],
+            )
+            return contract, True
+
+        mock_ingest.side_effect = ingest_record
+
+        result = ingest_sam_opportunities(limit=3)
+
+        self.assertEqual(result["count_ingested"], 3)
+        mock_fetch.assert_called_once()
+        self.assertEqual(mock_fetch.call_args.kwargs["limit"], 5)
 
 
 class UserContractProgressApiTests(APITestCase):

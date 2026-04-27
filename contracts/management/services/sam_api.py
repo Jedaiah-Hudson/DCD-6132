@@ -108,8 +108,6 @@ def fetch_sam_opportunities(
         raise SamApiError(f"SAM.gov request failed: {str(e)}")
 
 
-import time
-
 def ingest_sam_opportunities(
     notice_type=None,
     posted_from=None,
@@ -122,7 +120,7 @@ def ingest_sam_opportunities(
     total_ingested = 0
     count_created = 0
     count_updated = 0
-    batch_size = 2
+    batch_size = 5
 
     results = []
     raw_total_records = None
@@ -172,8 +170,6 @@ def ingest_sam_opportunities(
                 break
 
         offset += batch_size
-
-        time.sleep(3)
 
     return {
         "count_ingested": total_ingested,

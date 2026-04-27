@@ -150,6 +150,17 @@ class LinkedEmailApiTests(APITestCase):
         'redirect_uri': 'http://127.0.0.1:8000/accounts/gmail/callback/',
         'scope': ['https://www.googleapis.com/auth/gmail.readonly'],
     },
+    MSAL_CONFIG={
+        'client_id': 'microsoft-client-id',
+        'client_secret': 'microsoft-client-secret',
+        'authority': 'https://login.microsoftonline.com/common',
+        'redirect_uri': 'http://127.0.0.1:8000/accounts/outlook/callback/',
+        'scope': [
+            'offline_access',
+            'https://graph.microsoft.com/Mail.Read',
+            'https://graph.microsoft.com/User.Read',
+        ],
+    },
     FRONTEND_BASE_URL='http://localhost:5173',
 )
 class GmailOAuthApiTests(APITestCase):
@@ -223,8 +234,89 @@ class GmailOAuthApiTests(APITestCase):
             {'code': 'auth-code', 'state': 'bad-state'},
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/profile?gmail=error', response.url)
+        self.assertIn('message=Invalid+or+expired+OAuth+state.', response.url)
         self.assertFalse(ConnectedAccount.objects.exists())
+
+    @patch('accounts.views.requests.get')
+    @patch('accounts.views.requests.post')
+    def test_gmail_callback_redirects_profile_fetch_failure_to_profile(self, mock_post, mock_get):
+        signer = signing.TimestampSigner(salt='gmail-oauth-state')
+        oauth_state = signer.sign(str(self.user.id))
+
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {
+            'access_token': 'access-token-value',
+            'refresh_token': 'refresh-token-value',
+            'expires_in': 3600,
+        }
+        mock_get.return_value.status_code = 403
+        mock_get.return_value.json.return_value = {}
+
+        response = self.client.get(
+            '/accounts/gmail/callback/',
+            {'code': 'auth-code', 'state': oauth_state},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/profile?gmail=error', response.url)
+        self.assertIn('message=Failed+to+fetch+Gmail+mailbox+profile.', response.url)
+        self.assertFalse(ConnectedAccount.objects.exists())
+
+    @patch('accounts.views.msal.ConfidentialClientApplication')
+    def test_outlook_auth_starts_flow_with_signed_state(self, mock_client_class):
+        mock_client = mock_client_class.return_value
+        mock_client.get_authorization_request_url.return_value = 'https://login.microsoftonline.com/oauth-url'
+
+        response = self.client.get('/accounts/outlook/auth/', **self.auth_headers)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['auth_url'], 'https://login.microsoftonline.com/oauth-url')
+        mock_client_class.assert_called_once_with(
+            'microsoft-client-id',
+            authority='https://login.microsoftonline.com/common',
+            client_credential='microsoft-client-secret',
+        )
+        auth_call = mock_client.get_authorization_request_url.call_args
+        self.assertEqual(auth_call.args[0], [
+            'offline_access',
+            'https://graph.microsoft.com/Mail.Read',
+            'https://graph.microsoft.com/User.Read',
+        ])
+        self.assertEqual(auth_call.kwargs['redirect_uri'], 'http://127.0.0.1:8000/accounts/outlook/callback/')
+        self.assertIn('state', auth_call.kwargs)
+
+    @patch('accounts.views.requests.get')
+    @patch('accounts.views.msal.ConfidentialClientApplication')
+    def test_outlook_callback_exchanges_code_and_saves_connected_account(self, mock_client_class, mock_get):
+        signer = signing.TimestampSigner(salt='outlook-oauth-state')
+        oauth_state = signer.sign(str(self.user.id))
+        mock_client = mock_client_class.return_value
+        mock_client.acquire_token_by_authorization_code.return_value = {
+            'access_token': 'outlook-access-token',
+            'refresh_token': 'outlook-refresh-token',
+            'expires_in': 3600,
+        }
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            'mail': 'ConnectedUser@Outlook.com',
+            'userPrincipalName': 'fallback@outlook.com',
+        }
+
+        response = self.client.get(
+            '/accounts/outlook/callback/',
+            {'code': 'outlook-auth-code', 'state': oauth_state},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith('http://localhost:5173/profile?outlook=connected'))
+
+        account = ConnectedAccount.objects.get(user=self.user, email='connecteduser@outlook.com')
+        self.assertEqual(account.provider, 'outlook')
+        self.assertEqual(account.access_token, 'outlook-access-token')
+        self.assertEqual(account.refresh_token, 'outlook-refresh-token')
+        self.assertTrue(account.is_active)
 
 
 class ConnectedAccountSyncServiceTests(APITestCase):
