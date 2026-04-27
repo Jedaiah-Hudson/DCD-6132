@@ -416,10 +416,12 @@ class OpportunityListView(APIView):
                         'workflow_status',
                         UserContractProgress.WorkflowChoices.NOT_STARTED,
                     ),
+
                     'relationship_label': progress_map.get(contract.id, {}).get(
                         'relationship_label',
                         UserContractProgress.RelationshipChoices.UNASSIGNED,
                     ),
+
                     **match_metadata.get(contract.id, {}),
                 }
             )

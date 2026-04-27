@@ -34,9 +34,7 @@ export default function NaicsMultiSelect({ value, onChange }) {
 
   return (
     <div style={{ minWidth: 300 }}>
-      <label style={{ display: 'block', marginBottom: 6 }}>
-        NAICS Codes
-      </label>
+      
 
       <Select
         isMulti
