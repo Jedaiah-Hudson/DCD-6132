@@ -1041,12 +1041,18 @@
   }
   
   .summary-popup {
-    margin-top: 8px;
-    padding: 10px;
-    background: #f5f5f5;
+    margin-top: 10px;
+    background-color: #ffffff;
+    border: 1px solid #d9d9d9;
     border-radius: 8px;
-    font-size: 14px;
-    max-width: 400px;
+    padding: 14px 16px;
+    color: #374151;
+    line-height: 1.5;
+    max-width: 760px;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
   }
 
 
@@ -1127,15 +1133,6 @@
     }
 }
 
-.contract-description-preview {
-    display: -webkit-box;
-    margin: 14px 0 12px;
-    color: #475569;
-    line-height: 1.5;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-}
 
 .status-color-purple {
     background-color: #f3e8ff;
