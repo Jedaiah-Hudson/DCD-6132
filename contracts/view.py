@@ -170,6 +170,13 @@ def _tracked_progress_queryset(user):
                 UserContractProgress.WorkflowChoices.DRAFTING,
                 UserContractProgress.WorkflowChoices.SUBMITTED,
             ])
+            | Q(relationship_label__in=[
+                UserContractProgress.RelationshipChoices.PRIME,
+                UserContractProgress.RelationshipChoices.SUBCONTRACTOR,
+                UserContractProgress.RelationshipChoices.TEAMING,
+                UserContractProgress.RelationshipChoices.VENDOR,
+                UserContractProgress.RelationshipChoices.CONSULTANT,
+            ])
         )
         .select_related("contract")
     )
@@ -251,6 +258,7 @@ def _sync_contract_notifications_for_user(user):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def generate_draft(request):
     from .management.services.openai_service import generate_rfp_response
     from .management.services.prompt_builder import build_capability_profile_text
@@ -259,10 +267,10 @@ def generate_draft(request):
     contract_id = request.data.get("contract_id")
 
     # 1. Get contract
-    contract = Contract.objects.get(id=contract_id)
+    contract = get_object_or_404(Contract, id=contract_id)
 
     # 2. Get user's capability profile (latest one)
-    profile = CapabilityProfile.objects.order_by("-updated_at").first()
+    profile = CapabilityProfile.objects.filter(user=user).order_by("-updated_at").first()
 
     if not profile:
         return Response({"error": "No capability profile found"}, status=400)

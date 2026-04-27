@@ -1,0 +1,59 @@
+.rfp-back-button {
+    margin-bottom: 18px;
+}
+
+.rfp-card {
+    background: var(--pinkstem-panel);
+    border: 1px solid var(--pinkstem-border);
+    border-radius: 14px;
+    padding: 26px 28px;
+    box-shadow: var(--pinkstem-shadow);
+}
+
+.rfp-contract-select {
+    max-width: 100%;
+    margin-bottom: 16px;
+}
+
+.rfp-selected-contract {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 14px 0 18px;
+    padding: 16px;
+    border: 1px solid var(--pinkstem-border);
+    border-radius: 10px;
+    background-color: #ffffff;
+    color: var(--pinkstem-text);
+}
+
+.rfp-selected-contract span {
+    color: var(--pinkstem-muted);
+}
+
+.rfp-generate-button {
+    margin-top: 4px;
+}
+
+.rfp-result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.rfp-result-box {
+    min-height: 360px;
+    line-height: 1.55;
+}
+
+.rfp-message {
+    margin-bottom: 16px;
+}
+
+@media (max-width: 760px) {
+    .rfp-result-header {
+        flex-direction: column;
+    }
+}

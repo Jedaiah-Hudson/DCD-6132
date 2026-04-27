@@ -25,4 +25,5 @@ urlpatterns = [
     path("api/sam/sync/", sync_sam_opportunities, name="sam-sync"),
     path("contracts/dropdown/", contract_dropdown),
     path("generate-draft/", generate_draft, name="generate-draft"),
+    path("api/rfp/generate/", generate_draft, name="generate-rfp"),
 ]
