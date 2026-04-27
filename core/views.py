@@ -3,7 +3,6 @@ from django.contrib.auth.decorators import login_required
 import json
 import re
 import pytesseract
-import pypdfium2 as pdfium
 from django.db.models import Q
 
 from rest_framework.decorators import api_view, permission_classes
@@ -16,6 +15,12 @@ from rest_framework.views import APIView
 from accounts.models import CapabilityProfile, User
 from contracts.models import Contract, NAICSCode, UserContractProgress
 from contracts.management.services.naics_utils import get_category_for_naics
+from core.services.capability_extraction import (
+    extract_text_from_capability_document,
+    is_supported_capability_document,
+    parse_capability_text,
+)
+from core.services.matchmaking import get_matched_contracts_for_user
 from .forms import CapabilityProfileForm
 from .serializers import OpportunitySerializer
 
@@ -46,6 +51,8 @@ PROFILE_KEYS = [
     'website',
 ]
 
+SUPPORTED_DOCUMENT_MESSAGE = 'Please upload a PDF, PNG, JPG, or JPEG file.'
+
 
 def normalize_contract_status(value):
     normalized = (value or '').strip().lower()
@@ -63,123 +70,7 @@ def normalize_contract_status(value):
 
 
 def extract_text_from_pdf(uploaded_file):
-    uploaded_file.seek(0)
-    pdf_bytes = uploaded_file.read()
-    uploaded_file.seek(0)
-    pdf = pdfium.PdfDocument(pdf_bytes)
-    page_texts = []
-
-    for index in range(len(pdf)):
-        page = pdf[index]
-        page_image = page.render(scale=2).to_pil()
-        text = pytesseract.image_to_string(page_image).strip()
-        if text:
-            page_texts.append(text)
-        page.close()
-
-    pdf.close()
-    return '\n\n'.join(page_texts).strip()
-
-
-def parse_capability_text(text):
-    parsed = {key: '' for key in PROFILE_KEYS}
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-
-    section_headers = [
-        ('company_name', ['company name']),
-        ('capability_summary', ['capability summary', 'capabilities statement', 'summary', 'about us']),
-        ('core_competencies', ['core competencies', 'competencies']),
-        ('differentiators', ['differentiators']),
-        ('naics_codes', ['naics codes', 'naics']),
-        ('certifications', ['licenses & certifications', 'licenses and certifications', 'certifications']),
-        ('past_performance', ['past performance']),
-        ('contact_name', ['contact name']),
-        ('contact_email', ['contact email', 'email']),
-        ('contact_phone', ['contact phone', 'phone']),
-        ('website', ['website']),
-    ]
-
-    def normalize_line(line):
-        return re.sub(r'[^a-z0-9\s:&/-]', '', line.lower()).strip()
-
-    def find_section(line):
-        cleaned = normalize_line(line)
-        for key, headers in section_headers:
-            for header in headers:
-                if cleaned == header or cleaned.startswith(header + ':'):
-                    return key
-        return None
-
-    current_section = None
-    section_content = {key: [] for key in PROFILE_KEYS}
-
-    for line in lines:
-        section_key = find_section(line)
-        if section_key:
-            current_section = section_key
-            if ':' in line:
-                value = line.split(':', 1)[1].strip()
-                if value:
-                    section_content[section_key].append(value)
-            continue
-
-        if current_section:
-            section_content[current_section].append(line)
-
-    for key, content_lines in section_content.items():
-        if content_lines:
-            parsed[key] = '\n'.join(content_lines).strip()
-
-    full_text = '\n'.join(lines)
-
-    if not parsed['contact_email']:
-        email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', full_text)
-        if email_match:
-            parsed['contact_email'] = email_match.group(0)
-
-    if not parsed['contact_phone']:
-        phone_match = re.search(r'(\+?1[\s\.-]?)?\(?\d{3}\)?[\s\.-]?\d{3}[\s\.-]?\d{4}', full_text)
-        if phone_match:
-            parsed['contact_phone'] = phone_match.group(0)
-
-    if not parsed['website']:
-        website_match = re.search(r'(https?://\S+|www\.\S+)', full_text)
-        if website_match:
-            parsed['website'] = website_match.group(0)
-
-    if not parsed['naics_codes']:
-        naics_matches = re.findall(r'\b\d{6}\b', full_text)
-        if naics_matches:
-            parsed['naics_codes'] = sorted(set(naics_matches))
-
-    if not parsed['certifications']:
-        cert_lines = []
-        for line in lines:
-            if re.search(r'\b(iso|cmmi|sam|8a|hubzone|wosb|sdvosb)\b', line, re.IGNORECASE):
-                cert_lines.append(line)
-        if cert_lines:
-            parsed['certifications'] = '\n'.join(cert_lines)
-
-    def normalize_website(value):
-        website = value.strip().rstrip('.,;)')
-        website = website.replace('https:/www.', 'https://www.')
-        website = website.replace('http:/www.', 'http://www.')
-        website = re.sub(r'^https:/([^/])', r'https://\1', website)
-        website = re.sub(r'^http:/([^/])', r'http://\1', website)
-        if website.startswith('www.'):
-            website = 'https://' + website
-        return website
-
-    if parsed['website']:
-        parsed['website'] = normalize_website(parsed['website'])
-
-    if not parsed['company_name'] and lines:
-        parsed['company_name'] = lines[0]
-
-    if not parsed['capability_summary'] and len(lines) > 1:
-        parsed['capability_summary'] = lines[1]
-
-    return parsed
+    return extract_text_from_capability_document(uploaded_file)
 
 @login_required(login_url='/accounts/login-vis/')
 def profile(request):
@@ -199,20 +90,20 @@ def profile(request):
         if action == 'extract_ocr':
             uploaded_file = request.FILES.get('capability_pdf')
 
-            # start fresh for every uploaded PDF
+            # start fresh for every uploaded document
             structured_data = {key: '' for key in PROFILE_KEYS}
             submitted_data = None
 
             if not uploaded_file:
                 profile_form = CapabilityProfileForm(request.POST, request.FILES)
-                profile_form.add_error('capability_pdf', 'Upload a PDF to run OCR.')
-            elif not uploaded_file.name.lower().endswith('.pdf'):
+                profile_form.add_error('capability_pdf', 'Upload a capability statement document to extract.')
+            elif not is_supported_capability_document(uploaded_file):
                 profile_form = CapabilityProfileForm(request.POST, request.FILES)
-                profile_form.add_error('capability_pdf', 'Please upload a PDF file.')
+                profile_form.add_error('capability_pdf', SUPPORTED_DOCUMENT_MESSAGE)
             else:
                 try:
                     processed_file_name = uploaded_file.name
-                    extracted_text = extract_text_from_pdf(uploaded_file)
+                    extracted_text = extract_text_from_capability_document(uploaded_file)
                     parsed_data = parse_capability_text(extracted_text)
 
                     structured_data.update(parsed_data)
@@ -222,7 +113,7 @@ def profile(request):
                     ocr_error = 'Tesseract is not installed or not in your PATH.'
                     profile_form = CapabilityProfileForm()
                 except Exception as exc:
-                    ocr_error = f'Failed to process PDF: {exc}'
+                    ocr_error = f'Failed to process document: {exc}'
                     profile_form = CapabilityProfileForm()
 
         elif action == 'submit_profile':
@@ -242,7 +133,7 @@ def profile(request):
                             capability_profile.source_pdf = uploaded_file
                         capability_profile.is_ocr_generated = True
                         try:
-                            extracted_text = extract_text_from_pdf(uploaded_file)
+                            extracted_text = extract_text_from_capability_document(uploaded_file)
                             capability_profile.ocr_extracted_text = extracted_text
                         except Exception:
                             pass
@@ -303,7 +194,22 @@ def save_capability_profile(request):
 
     # save dropdown selections
     if naics_codes:
-        naics_objects = NAICSCode.objects.filter(code__in=naics_codes)
+        if isinstance(naics_codes, str):
+            naics_codes = re.findall(r"\b\d{6}\b", naics_codes)
+
+        normalized_naics_codes = []
+        for code in naics_codes:
+            normalized_code = str(code or "").strip()
+            if re.fullmatch(r"\d{6}", normalized_code) and normalized_code not in normalized_naics_codes:
+                normalized_naics_codes.append(normalized_code)
+
+        for code in normalized_naics_codes:
+            NAICSCode.objects.get_or_create(
+                code=code,
+                defaults={"title": "Imported from capability profile"},
+            )
+
+        naics_objects = NAICSCode.objects.filter(code__in=normalized_naics_codes)
         profile.naics_codes.set(naics_objects)
     else:
         profile.naics_codes.clear()
@@ -364,18 +270,18 @@ def extract_capability_profile(request):
 
     if not uploaded_file:
         return Response(
-            {'success': False, 'message': 'Upload a PDF to run OCR.'},
+            {'success': False, 'message': 'Upload a capability statement document to extract.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    if not uploaded_file.name.lower().endswith('.pdf'):
+    if not is_supported_capability_document(uploaded_file):
         return Response(
-            {'success': False, 'message': 'Please upload a PDF file.'},
+            {'success': False, 'message': SUPPORTED_DOCUMENT_MESSAGE},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
     try:
-        extracted_text = extract_text_from_pdf(uploaded_file)
+        extracted_text = extract_text_from_capability_document(uploaded_file)
         parsed_data = parse_capability_text(extracted_text)
 
         return Response(
@@ -396,7 +302,7 @@ def extract_capability_profile(request):
         )
     except Exception as exc:
         return Response(
-            {'success': False, 'message': f'Failed to process PDF: {exc}'},
+            {'success': False, 'message': f'Failed to process document: {exc}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -446,27 +352,34 @@ class OpportunityListView(APIView):
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
 
-            profile = CapabilityProfile.objects.filter(user=request.user).first()
-            if not profile or not profile.naics_codes.exists():
-                return Response([], status=status.HTTP_200_OK)
-
-            user_naics_codes = list(profile.naics_codes.values_list('code', flat=True))
-            contracts = contracts.filter(naics_code__in=user_naics_codes)
+            matched_contracts = get_matched_contracts_for_user(request.user, queryset=contracts)
+            match_metadata = {
+                item['contract'].id: {
+                    'match_score': item['match_score'],
+                    'match_reasons': item['match_reasons'],
+                }
+                for item in matched_contracts
+            }
+            contracts = [item['contract'] for item in matched_contracts]
+        else:
+            match_metadata = {}
 
         progress_map = {}
+        contract_ids = [contract.id for contract in contracts]
         if request.user.is_authenticated:
             progress_map = {
                 progress.contract_id: {
                     'contract_progress': progress.contract_progress,
                     'workflow_status': progress.workflow_status,
+                    'relationship_label': progress.relationship_label,
                 }
                 for progress in UserContractProgress.objects.filter(
                     user=request.user,
-                    contract_id__in=contracts.values_list('id', flat=True),
+                    contract_id__in=contract_ids,
                 )
             }
 
-        naics_codes = [code for code in contracts.values_list('naics_code', flat=True) if code]
+        naics_codes = [contract.naics_code for contract in contracts if contract.naics_code]
         naics_category_map = {
             item['code']: item['broad_category']
             for item in NAICSCode.objects.filter(code__in=naics_codes).values('code', 'broad_category')
@@ -503,6 +416,11 @@ class OpportunityListView(APIView):
                         'workflow_status',
                         UserContractProgress.WorkflowChoices.NOT_STARTED,
                     ),
+                    'relationship_label': progress_map.get(contract.id, {}).get(
+                        'relationship_label',
+                        UserContractProgress.RelationshipChoices.UNASSIGNED,
+                    ),
+                    **match_metadata.get(contract.id, {}),
                 }
             )
 

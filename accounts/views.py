@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied
 from django.contrib.auth import authenticate, login as django_login
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -19,7 +20,13 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from .serializers import PasswordResetConfirmSerializer
 from .serializers import PasswordResetRequestSerializer
 from .utils import generate_reset_token, get_reset_token_expiration, send_password_reset_email
-from .services import refresh_contracting_opportunities_for_user
+from .services import (
+    create_or_update_mailbox_connection,
+    get_user_mailbox_connection,
+    refresh_contracting_opportunities_for_user,
+    serialize_mailbox_connection,
+    sync_mailbox_connection,
+)
 from django.conf import settings
 
 
@@ -263,6 +270,7 @@ def linked_email_detail_api(request, email_id):
         return Response({'error': 'Linked email not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     user = request.user
+    request.user.mailbox_connections.filter(additional_email=linked_email).delete()
     linked_email.delete()
     transaction.on_commit(lambda: refresh_contracting_opportunities_for_user(user))
     return Response(
@@ -273,6 +281,74 @@ def linked_email_detail_api(request, email_id):
         },
         status=status.HTTP_200_OK,
     )
+
+
+@api_view(['GET', 'POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mailbox_connections_api(request):
+    if request.method == 'GET':
+        connections = request.user.mailbox_connections.order_by('id')
+        return Response(
+            {'mailbox_connections': [serialize_mailbox_connection(connection) for connection in connections]},
+            status=status.HTTP_200_OK,
+        )
+
+    try:
+        connection = create_or_update_mailbox_connection(request.user, request.data)
+    except PermissionDenied as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+    except ValidationError as exc:
+        message = exc.messages[0] if hasattr(exc, 'messages') else str(exc)
+        return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response(
+        {
+            'message': 'Mailbox connected successfully.',
+            'mailbox_connection': serialize_mailbox_connection(connection),
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mailbox_connection_sync_api(request, connection_id):
+    try:
+        connection = get_user_mailbox_connection(request.user, connection_id)
+    except PermissionDenied as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+    result = sync_mailbox_connection(connection)
+    return Response({'message': 'Mailbox sync completed.', 'result': result}, status=status.HTTP_200_OK)
+
+
+@api_view(['DELETE'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mailbox_connection_detail_api(request, connection_id):
+    try:
+        connection = get_user_mailbox_connection(request.user, connection_id)
+    except PermissionDenied as exc:
+        return Response({'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
+
+    connection.delete()
+    return Response(
+        {
+            'message': 'Mailbox connection removed successfully.',
+            'removed_id': connection_id,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(['POST'])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def mailbox_connections_sync_api(request):
+    result = refresh_contracting_opportunities_for_user(request.user)
+    return Response({'message': 'Mailbox sync completed.', 'result': result}, status=status.HTTP_200_OK)
 # views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response

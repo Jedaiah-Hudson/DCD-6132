@@ -16,6 +16,7 @@ class UserContractProgressSerializer(serializers.ModelSerializer):
             "contract",
             "contract_progress",
             "workflow_status",
+            "relationship_label",
             "notes",
             "created_at",
             "updated_at",

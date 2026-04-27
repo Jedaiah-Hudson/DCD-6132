@@ -25,6 +25,14 @@ const WORKFLOW_STATUS_COLORS = {
   DRAFTING: 'blue',
   SUBMITTED: 'green',
 };
+const RELATIONSHIP_LABEL_COLORS = {
+  UNASSIGNED: 'gray',
+  PRIME: 'green',
+  SUBCONTRACTOR: 'blue',
+  TEAMING: 'purple',
+  VENDOR: 'amber',
+  CONSULTANT: 'teal',
+};
 const PROGRESS_STATUS_LABELS = {
   NONE: 'Not tracked',
   PENDING: 'Pending',
@@ -36,6 +44,14 @@ const WORKFLOW_STATUS_LABELS = {
   REVIEWING: 'Reviewing',
   DRAFTING: 'Drafting',
   SUBMITTED: 'Submitted',
+};
+const RELATIONSHIP_LABELS = {
+  UNASSIGNED: 'Unassigned',
+  PRIME: 'Prime',
+  SUBCONTRACTOR: 'Sub',
+  TEAMING: 'Teaming',
+  VENDOR: 'Vendor',
+  CONSULTANT: 'Consultant',
 };
 const NAICS_CATEGORY_COLORS = {
   agriculture: 'green',
@@ -86,19 +102,23 @@ const NAICS_CATEGORY_COLORS = {
   other: 'gray',
 };
 const DISMISSED_STORAGE_KEY = 'dismissedDashboardOpportunities';
+const RECENTLY_VIEWED_STORAGE_KEY = 'recentlyViewedContractsByWorkspace';
+const MAX_RECENTLY_VIEWED = 8;
 const WORKSPACE_CONFIG = {
   dashboard: {
     pageTitle: 'Dashboard',
     searchPlaceholder: 'Search opportunities...',
     sectionTitle: 'Explore Contracts',
     sectionHelperText: 'Filter live opportunities by agency, partner, status, NAICS code, and search terms.',
-    recentTitle: 'Recent Opportunities',
+    recentTitle: 'Recently Visited',
     emptyMessage: 'No opportunities match the selected filters.',
     loadingMessage: 'Loading opportunities from the backend...',
     activeNav: 'dashboard',
     showSummary: true,
     showSync: true,
+    showRecentVisits: true,
     allowDismiss: true,
+    dismissLabel: 'Not Interested',
   },
   matchmaking: {
     pageTitle: 'AI Matchmaking',
@@ -111,10 +131,12 @@ const WORKSPACE_CONFIG = {
     activeNav: 'matchmaking',
     showSummary: false,
     showSync: false,
+    showRecentVisits: false,
     overviewTitle: 'Profile-Based Matches',
     overviewText: 'Get matched with the best-fit contracts for your business using your profile and capability statement details.',
     overviewMetricLabel: 'Matched',
-    allowDismiss: false,
+    allowDismiss: true,
+    dismissLabel: 'Not Interested',
   },
   myContracts: {
     pageTitle: 'My Contracts',
@@ -127,10 +149,12 @@ const WORKSPACE_CONFIG = {
     activeNav: 'my-contracts',
     showSummary: false,
     showSync: false,
+    showRecentVisits: false,
     overviewTitle: 'Current Workboard',
     overviewText: 'Contracts land here when you start actively working them, whether that means progress labels or workflow steps.',
     overviewMetricLabel: 'Active',
     allowDismiss: false,
+    dismissLabel: '',
   },
 };
 
@@ -158,6 +182,12 @@ function getWorkflowStatusClass(status) {
   return `status-tag status-color-${colorName}`;
 }
 
+function getRelationshipLabelClass(label) {
+  const normalizedLabel = String(label || 'UNASSIGNED').trim().toUpperCase();
+  const colorName = RELATIONSHIP_LABEL_COLORS[normalizedLabel] || 'gray';
+  return `status-tag status-color-${colorName}`;
+}
+
 function formatNaicsCategory(category) {
   return String(category || 'Other')
     .replace(/_/g, ' ')
@@ -172,6 +202,11 @@ function formatProgressStatus(status) {
 function formatWorkflowStatus(status) {
   const normalizedStatus = String(status || 'NOT_STARTED').trim().toUpperCase();
   return WORKFLOW_STATUS_LABELS[normalizedStatus] || normalizedStatus.replace(/_/g, ' ');
+}
+
+function formatRelationshipLabel(label) {
+  const normalizedLabel = String(label || 'UNASSIGNED').trim().toUpperCase();
+  return RELATIONSHIP_LABELS[normalizedLabel] || normalizedLabel.replace(/_/g, ' ');
 }
 
 function formatLastSynced() {
@@ -196,6 +231,31 @@ function readDismissedOpportunities() {
 
 function writeDismissedOpportunities(ids) {
   window.localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(ids));
+}
+
+function readRecentlyViewedContracts(workspaceType) {
+  try {
+    const storedValue = window.localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
+    const parsedValue = JSON.parse(storedValue || '{}');
+    const workspaceIds = parsedValue?.[workspaceType];
+    return Array.isArray(workspaceIds) ? workspaceIds : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentlyViewedContracts(workspaceType, ids) {
+  try {
+    const storedValue = window.localStorage.getItem(RECENTLY_VIEWED_STORAGE_KEY);
+    const parsedValue = JSON.parse(storedValue || '{}');
+    parsedValue[workspaceType] = ids;
+    window.localStorage.setItem(RECENTLY_VIEWED_STORAGE_KEY, JSON.stringify(parsedValue));
+  } catch {
+    window.localStorage.setItem(
+      RECENTLY_VIEWED_STORAGE_KEY,
+      JSON.stringify({ [workspaceType]: ids }),
+    );
+  }
 }
 
 async function syncSamOpportunities(limit = 10) {
@@ -269,6 +329,7 @@ function isTrackedContract(opportunity) {
   return (
     (opportunity.contract_progress && opportunity.contract_progress !== 'NONE')
     || (opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED')
+    || (opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED')
   );
 }
 
@@ -276,6 +337,7 @@ function ContractsDisplayPage({ workspaceType }) {
   const config = WORKSPACE_CONFIG[workspaceType] || WORKSPACE_CONFIG.dashboard;
   const navigate = useNavigate();
   const location = useLocation();
+  const recentSectionRef = useRef(null);
   const restoreWorkspaceState = (
     location.state?.restoreWorkspace?.pathname === location.pathname
       ? location.state.restoreWorkspace
@@ -290,6 +352,7 @@ function ContractsDisplayPage({ workspaceType }) {
   const [selectedPartner, setSelectedPartner] = useState(restoreWorkspaceState?.selectedPartner || '');
   const [selectedStatus, setSelectedStatus] = useState(restoreWorkspaceState?.selectedStatus || '');
   const [dismissedOpportunityIds, setDismissedOpportunityIds] = useState(() => readDismissedOpportunities());
+  const [recentlyViewedIds, setRecentlyViewedIds] = useState(() => readRecentlyViewedContracts(workspaceType));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -352,6 +415,10 @@ function ContractsDisplayPage({ workspaceType }) {
     writeDismissedOpportunities(dismissedOpportunityIds);
   }, [dismissedOpportunityIds]);
 
+  useEffect(() => {
+    writeRecentlyViewedContracts(workspaceType, recentlyViewedIds);
+  }, [recentlyViewedIds, workspaceType]);
+
   const workspaceOpportunities = useMemo(() => {
     const visibleOpportunities = config.allowDismiss
       ? allOpportunities.filter((opportunity) => !dismissedOpportunityIds.includes(opportunity.id))
@@ -409,6 +476,7 @@ function ContractsDisplayPage({ workspaceType }) {
         opportunity.description,
         opportunity.partner,
         opportunity.status,
+        opportunity.relationship_label,
         opportunity.naics_code,
       ]
         .filter(Boolean)
@@ -430,7 +498,23 @@ function ContractsDisplayPage({ workspaceType }) {
     });
   }, [workspaceOpportunities, searchTerm, selectedAgency, selectedPartner, selectedStatus, selectedNaics]);
 
-  const recentOpportunities = useMemo(() => filteredOpportunities.slice(0, 3), [filteredOpportunities]);
+  const recentOpportunities = useMemo(() => {
+    if (!recentlyViewedIds.length) {
+      return [];
+    }
+
+    const opportunityMap = new Map(workspaceOpportunities.map((opportunity) => [opportunity.id, opportunity]));
+
+    return recentlyViewedIds
+      .map((opportunityId) => opportunityMap.get(opportunityId))
+      .filter(Boolean);
+  }, [recentlyViewedIds, workspaceOpportunities]);
+
+  const bottomSectionOpportunities = useMemo(() => (
+    config.showRecentVisits
+      ? recentOpportunities
+      : filteredOpportunities.slice(0, 3)
+  ), [config.showRecentVisits, filteredOpportunities, recentOpportunities]);
 
   useEffect(() => {
     if (loading || hasRestoredPosition.current || !restoreWorkspaceState) {
@@ -456,6 +540,11 @@ function ContractsDisplayPage({ workspaceType }) {
   }, [loading, restoreWorkspaceState]);
 
   const handleViewDetails = (opportunityId) => {
+    setRecentlyViewedIds((currentIds) => [
+      opportunityId,
+      ...currentIds.filter((existingId) => existingId !== opportunityId),
+    ].slice(0, MAX_RECENTLY_VIEWED));
+
     navigate(`/contracts/${opportunityId}`, {
       state: {
         workspaceReturn: {
@@ -471,6 +560,10 @@ function ContractsDisplayPage({ workspaceType }) {
         },
       },
     });
+  };
+
+  const handleJumpToRecent = () => {
+    recentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleSyncContracts = async () => {
@@ -511,6 +604,14 @@ function ContractsDisplayPage({ workspaceType }) {
   };
 
   const handleDismissOpportunity = (opportunityId) => {
+    const confirmed = window.confirm(
+      'Are you sure you want to mark this contract as not interested and remove it from this page? You cannot undo this.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
     setDismissedOpportunityIds((currentIds) => (
       currentIds.includes(opportunityId)
         ? currentIds
@@ -557,13 +658,6 @@ function ContractsDisplayPage({ workspaceType }) {
       <div className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="dashboard-inner">
-            <input
-              type="text"
-              placeholder={config.searchPlaceholder}
-              className="search-bar"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-            />
             <div className="topbar-icons">
               <span
                 className="profile-icon-placeholder"
@@ -580,6 +674,16 @@ function ContractsDisplayPage({ workspaceType }) {
         <main className="dashboard-content">
           <div className="dashboard-inner">
             <h1 className="page-title">{config.pageTitle}</h1>
+
+            <div className="workspace-quick-actions">
+              <button
+                className="jump-section-button"
+                type="button"
+                onClick={handleJumpToRecent}
+              >
+                Jump to {config.recentTitle}
+              </button>
+            </div>
 
             {config.showSummary && (
               <section className="section progress-summary-section">
@@ -643,6 +747,21 @@ function ContractsDisplayPage({ workspaceType }) {
                 <div>
                   <h2 className="section-title">{config.sectionTitle}</h2>
                   <p className="section-helper-text">{config.sectionHelperText}</p>
+                </div>
+              </div>
+              <div className="filters-grid">
+                <div className="filter-group filter-group-search">
+                  <label htmlFor="contractsSearch" className="filter-label">
+                    Search
+                  </label>
+                  <input
+                    id="contractsSearch"
+                    type="text"
+                    placeholder={config.searchPlaceholder}
+                    className="search-bar contracts-search-bar"
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                  />
                 </div>
                 <div className="filter-group">
                   <label htmlFor="agencyFilter" className="filter-label">
@@ -729,6 +848,7 @@ function ContractsDisplayPage({ workspaceType }) {
                   {filteredOpportunities.map((opportunity) => {
                     const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
                     const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
+                    const hasRelationshipTag = opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED';
 
                     return (
                       <div
@@ -736,7 +856,7 @@ function ContractsDisplayPage({ workspaceType }) {
                         className="contract-card"
                         data-contract-id={opportunity.id}
                       >
-                        <div className="card-heading-row">
+                        <div className={`card-heading-row ${(hasProgressTag || hasWorkflowTag || hasRelationshipTag) ? 'card-heading-row-with-tags' : 'card-heading-row-no-tags'}`}>
                           <div className="card-heading-copy">
                             <div className="title-row">
                               <h3>{opportunity.title}</h3>
@@ -753,7 +873,7 @@ function ContractsDisplayPage({ workspaceType }) {
                                 {opportunity.description || 'No summary available.'}
                               </div>
                             )}
-                            {(hasProgressTag || hasWorkflowTag) && (
+                            {(hasProgressTag || hasWorkflowTag || hasRelationshipTag) && (
                               <div className="tracking-tag-row">
                                 {hasProgressTag && (
                                   <span className={getProgressStatusClass(opportunity.contract_progress)}>
@@ -765,10 +885,15 @@ function ContractsDisplayPage({ workspaceType }) {
                                     {formatWorkflowStatus(opportunity.workflow_status)}
                                   </span>
                                 )}
+                                {hasRelationshipTag && (
+                                  <span className={getRelationshipLabelClass(opportunity.relationship_label)}>
+                                    {formatRelationshipLabel(opportunity.relationship_label)}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
-                          <div className="card-action-stack">
+                          <div className="card-action-row">
                             <button
                               className="note-action-button"
                               type="button"
@@ -782,11 +907,15 @@ function ContractsDisplayPage({ workspaceType }) {
                                 type="button"
                                 onClick={() => handleDismissOpportunity(opportunity.id)}
                               >
-                                Not Interested
+                                {config.dismissLabel}
                               </button>
                             )}
                           </div>
                         </div>
+
+                        <p className="contract-description-preview">
+                          {opportunity.description || 'No description available.'}
+                        </p>
 
                         <p>
                           <strong>Agency:</strong>{' '}
@@ -818,10 +947,43 @@ function ContractsDisplayPage({ workspaceType }) {
               )}
             </section>
 
-            <section className="section">
-              <h2 className="section-title">{config.recentTitle}</h2>
-              {recentOpportunities.length === 0 ? (
-                <div className="state-card">No opportunities available for the current filters.</div>
+            <section className="section" ref={recentSectionRef}>
+              {config.showRecentVisits ? (
+                <div className="section-heading-row recent-section-heading-row">
+                  <div>
+                    <h2 className="section-title">{config.recentTitle}</h2>
+                    <p className="section-helper-text">
+                      Contracts you opened with View Details show up here so you can get back to them faster.
+                    </p>
+                  </div>
+                  <button
+                    className="jump-section-button jump-section-button-secondary"
+                    type="button"
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  >
+                    Back to Top
+                  </button>
+                </div>
+              ) : (
+                <div className="section-heading-row recent-section-heading-row">
+                  <div>
+                    <h2 className="section-title">{config.recentTitle}</h2>
+                  </div>
+                  <button
+                    className="jump-section-button jump-section-button-secondary"
+                    type="button"
+                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  >
+                    Back to Top
+                  </button>
+                </div>
+              )}
+              {bottomSectionOpportunities.length === 0 ? (
+                <div className="state-card">
+                  {config.showRecentVisits
+                    ? 'No recently visited contracts yet.'
+                    : 'No opportunities available for the current filters.'}
+                </div>
               ) : (
                 <div className="history-table-wrapper">
                   <table className="history-table">
@@ -830,10 +992,11 @@ function ContractsDisplayPage({ workspaceType }) {
                         <th>Title</th>
                         <th>Agency</th>
                         <th>NAICS</th>
+                        {config.showRecentVisits && <th>Action</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {recentOpportunities.map((opportunity) => (
+                      {bottomSectionOpportunities.map((opportunity) => (
                         <tr key={opportunity.id}>
                           <td>{opportunity.title}</td>
                           <td>{opportunity.agency || 'Not provided'}</td>
@@ -845,6 +1008,17 @@ function ContractsDisplayPage({ workspaceType }) {
                               {opportunity.naics_code || 'Not provided'}
                             </span>
                           </td>
+                          {config.showRecentVisits && (
+                            <td>
+                              <button
+                                className="history-action-button"
+                                type="button"
+                                onClick={() => handleViewDetails(opportunity.id)}
+                              >
+                                View Details
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
