@@ -220,6 +220,22 @@ function formatRelationshipLabel(label) {
   return RELATIONSHIP_LABELS[normalizedLabel] || normalizedLabel.replace(/_/g, ' ');
 }
 
+function truncateWords(text, maxWords = 100) {
+  const safeText = String(text || '').trim();
+
+  if (!safeText) {
+    return '';
+  }
+
+  const words = safeText.split(/\s+/);
+
+  if (words.length <= maxWords) {
+    return safeText;
+  }
+
+  return `${words.slice(0, maxWords).join(' ')}...`;
+}
+
 function formatLastSynced() {
   return new Date().toLocaleString('en-US', {
     month: 'long',
@@ -939,7 +955,7 @@ function ContractsDisplayPage({ workspaceType }) {
 
                               {hoveredId === opportunity.id && (
                                 <div className="summary-popup">
-                                  {opportunity.description || 'No summary available.'}
+                                  {truncateWords(opportunity.description, 100) || 'No summary available.'}
                                 </div>
                               )}
 
