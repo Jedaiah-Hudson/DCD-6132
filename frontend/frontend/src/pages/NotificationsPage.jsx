@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 const NOTIFICATIONS_API_URL = 'http://127.0.0.1:8000/api/notifications/';
 const NOTIFICATIONS_BULK_UPDATE_API_URL = 'http://127.0.0.1:8000/api/notifications/bulk-update/';
+const NOTIFICATIONS_PER_PAGE = 10;
 
 function formatDate(value) {
   if (!value) {
@@ -26,6 +27,7 @@ function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -111,10 +113,27 @@ function NotificationsPage() {
       });
   }, [notifications, searchTerm]);
 
-  const selectedVisibleCount = filteredNotifications.filter((item) => selectedIds.includes(item.id)).length;
+  const totalPages = Math.max(1, Math.ceil(filteredNotifications.length / NOTIFICATIONS_PER_PAGE));
 
-  const allVisibleSelected = filteredNotifications.length > 0
-    && filteredNotifications.every((item) => selectedIds.includes(item.id));
+  const paginatedNotifications = useMemo(() => {
+    const startIndex = (currentPage - 1) * NOTIFICATIONS_PER_PAGE;
+    return filteredNotifications.slice(startIndex, startIndex + NOTIFICATIONS_PER_PAGE);
+  }, [currentPage, filteredNotifications]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const selectedVisibleCount = paginatedNotifications.filter((item) => selectedIds.includes(item.id)).length;
+
+  const allVisibleSelected = paginatedNotifications.length > 0
+    && paginatedNotifications.every((item) => selectedIds.includes(item.id));
 
   const toggleSelection = (notificationId) => {
     setSelectedIds((currentIds) => (
@@ -127,14 +146,14 @@ function NotificationsPage() {
   const toggleSelectAllVisible = () => {
     if (allVisibleSelected) {
       setSelectedIds((currentIds) => currentIds.filter(
-        (id) => !filteredNotifications.some((item) => item.id === id)
+        (id) => !paginatedNotifications.some((item) => item.id === id)
       ));
       return;
     }
 
     setSelectedIds((currentIds) => Array.from(new Set([
       ...currentIds,
-      ...filteredNotifications.map((item) => item.id),
+      ...paginatedNotifications.map((item) => item.id),
     ])));
   };
 
@@ -327,7 +346,7 @@ function NotificationsPage() {
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={toggleSelectAllVisible}
-                    disabled={filteredNotifications.length === 0}
+                    disabled={paginatedNotifications.length === 0}
                   />
                   <span>Select all visible</span>
                 </label>
@@ -371,68 +390,97 @@ function NotificationsPage() {
               ) : filteredNotifications.length === 0 ? (
                 <div className="notifications-empty-state">No notifications match your current search.</div>
               ) : (
-                <div className="notifications-list">
-                  {filteredNotifications.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`notification-card ${item.is_read ? 'notification-card-read' : 'notification-card-unread'}`}
-                    >
-                      <div className="notification-card-header">
-                        <label className="notification-select">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.includes(item.id)}
-                            onChange={() => toggleSelection(item.id)}
-                          />
-                        </label>
+                <>
+                  <div className="notifications-list">
+                    {paginatedNotifications.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`notification-card ${item.is_read ? 'notification-card-read' : 'notification-card-unread'}`}
+                      >
+                        <div className="notification-card-header">
+                          <label className="notification-select">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(item.id)}
+                              onChange={() => toggleSelection(item.id)}
+                            />
+                          </label>
 
-                        <div className="notification-header-copy">
-                          <h3 className="notification-title">{item.title}</h3>
-                          <p className="notification-agency">{item.contract_title}</p>
+                          <div className="notification-header-copy">
+                            <h3 className="notification-title">{item.title}</h3>
+                            <p className="notification-agency">{item.contract_title}</p>
+                          </div>
+
+                          <span className={getSeverityClassName(item.severity)}>
+                            {item.severity === 'INFO' ? 'Update' : item.severity}
+                          </span>
                         </div>
 
-                        <span className={getSeverityClassName(item.severity)}>
-                          {item.severity === 'INFO' ? 'Update' : item.severity}
-                        </span>
-                      </div>
+                        <div className="notification-meta-row">
+                          <span className="notification-meta-item">
+                            <strong>Agency:</strong> {item.contract_agency || 'Not provided'}
+                          </span>
+                          <span className="notification-meta-item">
+                            <strong>Deadline:</strong> {formatDate(item.due_at)}
+                          </span>
+                          <span className="notification-meta-item">
+                            <strong>Type:</strong> {item.notification_type}
+                          </span>
+                        </div>
 
-                      <div className="notification-meta-row">
-                        <span className="notification-meta-item">
-                          <strong>Agency:</strong> {item.contract_agency || 'Not provided'}
-                        </span>
-                        <span className="notification-meta-item">
-                          <strong>Deadline:</strong> {formatDate(item.due_at)}
-                        </span>
-                        <span className="notification-meta-item">
-                          <strong>Type:</strong> {item.notification_type}
-                        </span>
-                      </div>
+                        <div className="notification-message-box">
+                          {item.message}
+                        </div>
 
-                      <div className="notification-message-box">
-                        {item.message}
+                        <div className="notification-card-actions">
+                          <button
+                            className="notifications-inline-action"
+                            type="button"
+                            onClick={() => handleBulkUpdate(item.is_read ? 'unread' : 'read', [item.id])}
+                            disabled={saving}
+                          >
+                            Mark as {item.is_read ? 'unread' : 'read'}
+                          </button>
+                          <button
+                            className="notifications-inline-action notifications-inline-action-danger"
+                            type="button"
+                            onClick={() => handleBulkUpdate('delete', [item.id])}
+                            disabled={saving}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
-
-                      <div className="notification-card-actions">
-                        <button
-                          className="notifications-inline-action"
-                          type="button"
-                          onClick={() => handleBulkUpdate(item.is_read ? 'unread' : 'read', [item.id])}
-                          disabled={saving}
-                        >
-                          Mark as {item.is_read ? 'unread' : 'read'}
-                        </button>
-                        <button
-                          className="notifications-inline-action notifications-inline-action-danger"
-                          type="button"
-                          onClick={() => handleBulkUpdate('delete', [item.id])}
-                          disabled={saving}
-                        >
-                          Remove
-                        </button>
-                      </div>
+                    ))}
+                  </div>
+                  <div className="notifications-pagination-row">
+                    <p className="notifications-pagination-summary">
+                      Showing {Math.min((currentPage - 1) * NOTIFICATIONS_PER_PAGE + 1, filteredNotifications.length)}-
+                      {Math.min(currentPage * NOTIFICATIONS_PER_PAGE, filteredNotifications.length)} of {filteredNotifications.length}
+                    </p>
+                    <div className="notifications-pagination-controls">
+                      <button
+                        className="notifications-pagination-button"
+                        type="button"
+                        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+                      <span className="notifications-pagination-indicator">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        className="notifications-pagination-button"
+                        type="button"
+                        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                </>
               )}
             </section>
           </div>

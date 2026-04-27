@@ -88,6 +88,7 @@ const NAICS_CATEGORY_COLORS = {
 const DISMISSED_STORAGE_KEY = 'dismissedDashboardOpportunities';
 const RECENTLY_VIEWED_STORAGE_KEY = 'recentlyViewedContractsByWorkspace';
 const MAX_RECENTLY_VIEWED = 8;
+const CONTRACTS_PER_PAGE = 10;
 const WORKSPACE_CONFIG = {
   dashboard: {
     pageTitle: 'Dashboard',
@@ -325,6 +326,7 @@ function ContractsDisplayPage({ workspaceType }) {
   const [selectedStatus, setSelectedStatus] = useState(restoreWorkspaceState?.selectedStatus || '');
   const [dismissedOpportunityIds, setDismissedOpportunityIds] = useState(() => readDismissedOpportunities());
   const [recentlyViewedIds, setRecentlyViewedIds] = useState(() => readRecentlyViewedContracts(workspaceType));
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -469,6 +471,13 @@ function ContractsDisplayPage({ workspaceType }) {
     });
   }, [workspaceOpportunities, searchTerm, selectedAgency, selectedPartner, selectedStatus, selectedNaics]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredOpportunities.length / CONTRACTS_PER_PAGE));
+
+  const paginatedOpportunities = useMemo(() => {
+    const startIndex = (currentPage - 1) * CONTRACTS_PER_PAGE;
+    return filteredOpportunities.slice(startIndex, startIndex + CONTRACTS_PER_PAGE);
+  }, [currentPage, filteredOpportunities]);
+
   const recentOpportunities = useMemo(() => {
     if (!recentlyViewedIds.length) {
       return [];
@@ -486,6 +495,33 @@ function ContractsDisplayPage({ workspaceType }) {
       ? recentOpportunities
       : filteredOpportunities.slice(0, 3)
   ), [config.showRecentVisits, filteredOpportunities, recentOpportunities]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedNaics, selectedAgency, selectedPartner, selectedStatus, workspaceType]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (loading || !restoreWorkspaceState?.contractId || hasRestoredPosition.current) {
+      return;
+    }
+
+    const matchingIndex = filteredOpportunities.findIndex(
+      (opportunity) => opportunity.id === restoreWorkspaceState.contractId,
+    );
+
+    if (matchingIndex >= 0) {
+      const targetPage = Math.floor(matchingIndex / CONTRACTS_PER_PAGE) + 1;
+      if (targetPage !== currentPage) {
+        setCurrentPage(targetPage);
+      }
+    }
+  }, [currentPage, filteredOpportunities, loading, restoreWorkspaceState]);
 
   useEffect(() => {
     if (loading || hasRestoredPosition.current || !restoreWorkspaceState) {
@@ -815,96 +851,125 @@ function ContractsDisplayPage({ workspaceType }) {
               ) : filteredOpportunities.length === 0 ? (
                 <div className="state-card">{config.emptyMessage}</div>
               ) : (
-                <div className="contract-list">
-                  {filteredOpportunities.map((opportunity) => {
-                    const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
-                    const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
+                <>
+                  <div className="contract-list">
+                    {paginatedOpportunities.map((opportunity) => {
+                      const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
+                      const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
 
-                    return (
-                      <div
-                        key={opportunity.id}
-                        className="contract-card"
-                        data-contract-id={opportunity.id}
-                      >
-                        <div className={`card-heading-row ${(hasProgressTag || hasWorkflowTag) ? 'card-heading-row-with-tags' : 'card-heading-row-no-tags'}`}>
-                          <div className="card-heading-copy">
-                            <div className="title-row">
-                              <h3>{opportunity.title}</h3>
-                              <span
-                                className="summary-button"
-                                onMouseEnter={() => setHoveredId(opportunity.id)}
-                                onMouseLeave={() => setHoveredId(null)}
-                              >
-                                View Summary
-                              </span>
+                      return (
+                        <div
+                          key={opportunity.id}
+                          className="contract-card"
+                          data-contract-id={opportunity.id}
+                        >
+                          <div className={`card-heading-row ${(hasProgressTag || hasWorkflowTag) ? 'card-heading-row-with-tags' : 'card-heading-row-no-tags'}`}>
+                            <div className="card-heading-copy">
+                              <div className="title-row">
+                                <h3>{opportunity.title}</h3>
+                                <span
+                                  className="summary-button"
+                                  onMouseEnter={() => setHoveredId(opportunity.id)}
+                                  onMouseLeave={() => setHoveredId(null)}
+                                >
+                                  View Summary
+                                </span>
+                              </div>
+                              {hoveredId === opportunity.id && (
+                                <div className="summary-popup">
+                                  {opportunity.description || 'No summary available.'}
+                                </div>
+                              )}
+                              {(hasProgressTag || hasWorkflowTag) && (
+                                <div className="tracking-tag-row">
+                                  {hasProgressTag && (
+                                    <span className={getProgressStatusClass(opportunity.contract_progress)}>
+                                      {formatProgressStatus(opportunity.contract_progress)}
+                                    </span>
+                                  )}
+                                  {hasWorkflowTag && (
+                                    <span className={getWorkflowStatusClass(opportunity.workflow_status)}>
+                                      {formatWorkflowStatus(opportunity.workflow_status)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            {hoveredId === opportunity.id && (
-                              <div className="summary-popup">
-                                {opportunity.description || 'No summary available.'}
-                              </div>
-                            )}
-                            {(hasProgressTag || hasWorkflowTag) && (
-                              <div className="tracking-tag-row">
-                                {hasProgressTag && (
-                                  <span className={getProgressStatusClass(opportunity.contract_progress)}>
-                                    {formatProgressStatus(opportunity.contract_progress)}
-                                  </span>
-                                )}
-                                {hasWorkflowTag && (
-                                  <span className={getWorkflowStatusClass(opportunity.workflow_status)}>
-                                    {formatWorkflowStatus(opportunity.workflow_status)}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className="card-action-row">
-                            <button
-                              className="note-action-button"
-                              type="button"
-                              onClick={() => handleViewDetails(opportunity.id)}
-                            >
-                              View Details
-                            </button>
-                            {config.allowDismiss && (
+                            <div className="card-action-row">
                               <button
-                                className="note-secondary-button"
+                                className="note-action-button"
                                 type="button"
-                                onClick={() => handleDismissOpportunity(opportunity.id)}
+                                onClick={() => handleViewDetails(opportunity.id)}
                               >
-                                {config.dismissLabel}
+                                View Details
                               </button>
-                            )}
+                              {config.allowDismiss && (
+                                <button
+                                  className="note-secondary-button"
+                                  type="button"
+                                  onClick={() => handleDismissOpportunity(opportunity.id)}
+                                >
+                                  {config.dismissLabel}
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        </div>
 
-                        <p>
-                          <strong>Agency:</strong>{' '}
-                          <span className="info-pill agency-pill">{opportunity.agency || 'Not provided'}</span>
-                        </p>
-                        <p>
-                          <strong>Partner:</strong>{' '}
-                          <span className="info-pill partner-pill">{opportunity.partner || 'Not provided'}</span>
-                        </p>
-                        <p>
-                          <strong>NAICS Code:</strong>{' '}
-                          <span
-                            className={getNaicsCategoryClass(opportunity.naics_category)}
-                            title={formatNaicsCategory(opportunity.naics_category)}
-                          >
-                            {opportunity.naics_code}
-                          </span>
-                        </p>
-                        <p>
-                          <strong>Contract Status:</strong>{' '}
-                          <span className={getListingStatusClass(opportunity.status)}>
-                            {opportunity.status || 'Unknown'}
-                          </span>
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <p>
+                            <strong>Agency:</strong>{' '}
+                            <span className="info-pill agency-pill">{opportunity.agency || 'Not provided'}</span>
+                          </p>
+                          <p>
+                            <strong>Partner:</strong>{' '}
+                            <span className="info-pill partner-pill">{opportunity.partner || 'Not provided'}</span>
+                          </p>
+                          <p>
+                            <strong>NAICS Code:</strong>{' '}
+                            <span
+                              className={getNaicsCategoryClass(opportunity.naics_category)}
+                              title={formatNaicsCategory(opportunity.naics_category)}
+                            >
+                              {opportunity.naics_code}
+                            </span>
+                          </p>
+                          <p>
+                            <strong>Contract Status:</strong>{' '}
+                            <span className={getListingStatusClass(opportunity.status)}>
+                              {opportunity.status || 'Unknown'}
+                            </span>
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="pagination-row">
+                    <p className="pagination-summary">
+                      Showing {Math.min((currentPage - 1) * CONTRACTS_PER_PAGE + 1, filteredOpportunities.length)}-
+                      {Math.min(currentPage * CONTRACTS_PER_PAGE, filteredOpportunities.length)} of {filteredOpportunities.length}
+                    </p>
+                    <div className="pagination-controls">
+                      <button
+                        className="pagination-button"
+                        type="button"
+                        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+                      <span className="pagination-page-indicator">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        className="pagination-button"
+                        type="button"
+                        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </section>
 
