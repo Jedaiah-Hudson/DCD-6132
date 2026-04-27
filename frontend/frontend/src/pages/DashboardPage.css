@@ -420,6 +420,55 @@
     gap: 18px;
 }
 
+.pagination-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 22px;
+    flex-wrap: wrap;
+}
+
+.pagination-summary {
+    margin: 0;
+    color: var(--pinkstem-muted);
+    font-size: 0.95rem;
+}
+
+.pagination-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.pagination-button {
+    min-width: 104px;
+    padding: 11px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--pinkstem-border);
+    background-color: #ffffff;
+    color: var(--pinkstem-text);
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.pagination-button:hover {
+    background-color: var(--pinkstem-accent-faint);
+}
+
+.pagination-button:disabled {
+    cursor: default;
+    opacity: 0.55;
+    background-color: #f8fafc;
+}
+
+.pagination-page-indicator {
+    color: var(--pinkstem-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
 .contract-card {
     background: var(--pinkstem-panel);
     border: 1px solid var(--pinkstem-border);
@@ -923,6 +972,11 @@
 
     .workspace-quick-actions {
         justify-content: flex-start;
+    }
+
+    .pagination-row {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
 
