@@ -8,6 +8,7 @@ import MyContractsPage from './pages/MyContractsPage';
 import ProfilePage from './pages/ProfilePage';
 import NotificationsPage from './pages/NotificationsPage';
 import ContractDetailPage from './pages/ContractDetailPage';
+import RfpGeneratorPage from './pages/RfpGeneratorPage';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
       <Route path="/ai-matchmaking" element={<AiMatchmakingPage />} />
       <Route path="/my-contracts" element={<MyContractsPage />} />
       <Route path="/contracts/:contractId" element={<ContractDetailPage />} />
+      <Route path="/rfp-generator" element={<RfpGeneratorPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/notifications" element={<NotificationsPage />} />
     </Routes>

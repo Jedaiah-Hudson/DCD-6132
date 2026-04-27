@@ -420,6 +420,7 @@
     gap: 18px;
 }
 
+
 .pagination-row {
     display: flex;
     align-items: center;
@@ -468,6 +469,7 @@
     font-size: 0.95rem;
     font-weight: 600;
 }
+
 
 .contract-card {
     background: var(--pinkstem-panel);
@@ -892,10 +894,12 @@
         justify-content: flex-start;
     }
 
+
     .pagination-row {
         align-items: flex-start;
         flex-direction: column;
     }
+
 }
 
 @media (max-width: 720px) {
@@ -1035,4 +1039,26 @@
         flex-direction: column;
         align-items: flex-start;
     }
+}
+
+.contract-description-preview {
+    display: -webkit-box;
+    margin: 14px 0 12px;
+    color: #475569;
+    line-height: 1.5;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
+.status-color-purple {
+    background-color: #f3e8ff;
+    border: 1px solid #d8b4fe;
+    color: #6b21a8;
+}
+
+.status-color-teal {
+    background-color: #ccfbf1;
+    border: 1px solid #5eead4;
+    color: #115e59;
 }
