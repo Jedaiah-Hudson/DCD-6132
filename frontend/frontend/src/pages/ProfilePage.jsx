@@ -789,6 +789,7 @@ function ProfilePage() {
             {successMessage && <p className="profile-success-message">{successMessage}</p>}
             {editing && <p className="profile-editing-message">Editing existing capability profile</p>}
 
+            {/*
             <section className="profile-section-card">
               <h2 className="profile-section-title">Email Connections</h2>
               <p className="profile-section-description">
@@ -891,6 +892,7 @@ function ProfilePage() {
                 )}
               </div>
             </section>
+            */}
 
             <section className="profile-section-card">
               <h2 className="profile-section-title">Capability Documents</h2>
