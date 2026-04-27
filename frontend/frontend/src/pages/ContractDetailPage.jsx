@@ -17,6 +17,14 @@ const WORKFLOW_OPTIONS = [
   { value: 'DRAFTING', label: 'Drafting' },
   { value: 'SUBMITTED', label: 'Submitted' },
 ];
+const RELATIONSHIP_OPTIONS = [
+  { value: 'UNASSIGNED', label: 'Unassigned' },
+  { value: 'PRIME', label: 'Prime' },
+  { value: 'SUBCONTRACTOR', label: 'Sub' },
+  { value: 'TEAMING', label: 'Teaming' },
+  { value: 'VENDOR', label: 'Vendor' },
+  { value: 'CONSULTANT', label: 'Consultant' },
+];
 const PROGRESS_STATUS_COLORS = {
   NONE: 'gray',
   PENDING: 'amber',
@@ -28,6 +36,14 @@ const WORKFLOW_STATUS_COLORS = {
   REVIEWING: 'amber',
   DRAFTING: 'blue',
   SUBMITTED: 'green',
+};
+const RELATIONSHIP_LABEL_COLORS = {
+  UNASSIGNED: 'gray',
+  PRIME: 'green',
+  SUBCONTRACTOR: 'blue',
+  TEAMING: 'purple',
+  VENDOR: 'amber',
+  CONSULTANT: 'teal',
 };
 const LISTING_STATUS_COLORS = {
   active: 'green',
@@ -68,6 +84,11 @@ function getWorkflowBadgeClass(status) {
   return `status-tag status-color-${colorName}`;
 }
 
+function getRelationshipBadgeClass(label) {
+  const colorName = RELATIONSHIP_LABEL_COLORS[label] || 'gray';
+  return `status-tag status-color-${colorName}`;
+}
+
 function getListingStatusClass(status) {
   const normalizedStatus = String(status || 'unknown').trim().toLowerCase();
   const colorName = LISTING_STATUS_COLORS[normalizedStatus] || 'gray';
@@ -104,6 +125,7 @@ function ContractDetailPage() {
   const [contract, setContract] = useState(null);
   const [contractProgress, setContractProgress] = useState('NONE');
   const [workflowStatus, setWorkflowStatus] = useState('NOT_STARTED');
+  const [relationshipLabel, setRelationshipLabel] = useState('UNASSIGNED');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -143,6 +165,7 @@ function ContractDetailPage() {
         setContract(contractData.contract);
         setContractProgress(progressData.contract_progress || 'NONE');
         setWorkflowStatus(progressData.workflow_status || 'NOT_STARTED');
+        setRelationshipLabel(progressData.relationship_label || 'UNASSIGNED');
         setNotes(progressData.notes || '');
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
@@ -175,6 +198,7 @@ function ContractDetailPage() {
         body: JSON.stringify({
           contract_progress: contractProgress,
           workflow_status: workflowStatus,
+          relationship_label: relationshipLabel,
           notes,
         }),
       });
@@ -187,6 +211,7 @@ function ContractDetailPage() {
 
       setContractProgress(data.contract_progress || 'NONE');
       setWorkflowStatus(data.workflow_status || 'NOT_STARTED');
+      setRelationshipLabel(data.relationship_label || 'UNASSIGNED');
       setNotes(data.notes || '');
       setSuccessMessage('Progress saved.');
     } catch (saveError) {
@@ -205,6 +230,12 @@ function ContractDetailPage() {
   const backButtonLabel = workspaceReturn?.pageTitle
     ? `Back to ${workspaceReturn.pageTitle}`
     : 'Back to Dashboard';
+
+  const shouldShowRfpButton = workspaceReturn?.pathname === '/my-contracts';
+
+  const handleGenerateRfp = () => {
+    navigate('/rfp-generator', { state: { selectedContractId: Number(contractId) } });
+  };
 
   return (
     <div className="dashboard-layout">
@@ -314,6 +345,16 @@ function ContractDetailPage() {
                       Open source listing
                     </a>
                   )}
+
+                  {shouldShowRfpButton && (
+                    <button
+                      className="notes-save-button detail-rfp-button"
+                      type="button"
+                      onClick={handleGenerateRfp}
+                    >
+                      Generate RFP
+                    </button>
+                  )}
                 </section>
 
                 <section className="section detail-section">
@@ -354,6 +395,25 @@ function ContractDetailPage() {
                   </select>
                   <span className={getWorkflowBadgeClass(workflowStatus)}>
                     {WORKFLOW_OPTIONS.find((option) => option.value === workflowStatus)?.label || workflowStatus}
+                  </span>
+
+                  <label className="status-label" htmlFor="relationshipLabel">
+                    Prime/Sub/Teaming label
+                  </label>
+                  <select
+                    id="relationshipLabel"
+                    className="status-select detail-workflow-select"
+                    value={relationshipLabel}
+                    onChange={(event) => setRelationshipLabel(event.target.value)}
+                  >
+                    {RELATIONSHIP_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className={getRelationshipBadgeClass(relationshipLabel)}>
+                    {RELATIONSHIP_OPTIONS.find((option) => option.value === relationshipLabel)?.label || relationshipLabel}
                   </span>
 
                   <label className="status-label" htmlFor="contractNotes">

@@ -127,3 +127,9 @@
         grid-template-columns: 1fr;
     }
 }
+
+.detail-rfp-button {
+    display: block;
+    width: fit-content;
+    margin-top: 18px;
+}

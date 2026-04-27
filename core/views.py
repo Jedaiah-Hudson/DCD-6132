@@ -371,6 +371,7 @@ class OpportunityListView(APIView):
                 progress.contract_id: {
                     'contract_progress': progress.contract_progress,
                     'workflow_status': progress.workflow_status,
+                    'relationship_label': progress.relationship_label,
                 }
                 for progress in UserContractProgress.objects.filter(
                     user=request.user,
@@ -415,6 +416,12 @@ class OpportunityListView(APIView):
                         'workflow_status',
                         UserContractProgress.WorkflowChoices.NOT_STARTED,
                     ),
+
+                    'relationship_label': progress_map.get(contract.id, {}).get(
+                        'relationship_label',
+                        UserContractProgress.RelationshipChoices.UNASSIGNED,
+                    ),
+
                     **match_metadata.get(contract.id, {}),
                 }
             )

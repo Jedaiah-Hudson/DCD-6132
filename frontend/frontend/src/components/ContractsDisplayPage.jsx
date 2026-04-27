@@ -25,6 +25,14 @@ const WORKFLOW_STATUS_COLORS = {
   DRAFTING: 'blue',
   SUBMITTED: 'green',
 };
+const RELATIONSHIP_LABEL_COLORS = {
+  UNASSIGNED: 'gray',
+  PRIME: 'green',
+  SUBCONTRACTOR: 'blue',
+  TEAMING: 'purple',
+  VENDOR: 'amber',
+  CONSULTANT: 'teal',
+};
 const PROGRESS_STATUS_LABELS = {
   NONE: 'Not tracked',
   PENDING: 'Pending',
@@ -36,6 +44,14 @@ const WORKFLOW_STATUS_LABELS = {
   REVIEWING: 'Reviewing',
   DRAFTING: 'Drafting',
   SUBMITTED: 'Submitted',
+};
+const RELATIONSHIP_LABELS = {
+  UNASSIGNED: 'Unassigned',
+  PRIME: 'Prime',
+  SUBCONTRACTOR: 'Sub',
+  TEAMING: 'Teaming',
+  VENDOR: 'Vendor',
+  CONSULTANT: 'Consultant',
 };
 const NAICS_CATEGORY_COLORS = {
   agriculture: 'green',
@@ -88,7 +104,9 @@ const NAICS_CATEGORY_COLORS = {
 const DISMISSED_STORAGE_KEY = 'dismissedDashboardOpportunities';
 const RECENTLY_VIEWED_STORAGE_KEY = 'recentlyViewedContractsByWorkspace';
 const MAX_RECENTLY_VIEWED = 8;
+
 const CONTRACTS_PER_PAGE = 10;
+
 const WORKSPACE_CONFIG = {
   dashboard: {
     pageTitle: 'Dashboard',
@@ -167,6 +185,12 @@ function getWorkflowStatusClass(status) {
   return `status-tag status-color-${colorName}`;
 }
 
+function getRelationshipLabelClass(label) {
+  const normalizedLabel = String(label || 'UNASSIGNED').trim().toUpperCase();
+  const colorName = RELATIONSHIP_LABEL_COLORS[normalizedLabel] || 'gray';
+  return `status-tag status-color-${colorName}`;
+}
+
 function formatNaicsCategory(category) {
   return String(category || 'Other')
     .replace(/_/g, ' ')
@@ -181,6 +205,11 @@ function formatProgressStatus(status) {
 function formatWorkflowStatus(status) {
   const normalizedStatus = String(status || 'NOT_STARTED').trim().toUpperCase();
   return WORKFLOW_STATUS_LABELS[normalizedStatus] || normalizedStatus.replace(/_/g, ' ');
+}
+
+function formatRelationshipLabel(label) {
+  const normalizedLabel = String(label || 'UNASSIGNED').trim().toUpperCase();
+  return RELATIONSHIP_LABELS[normalizedLabel] || normalizedLabel.replace(/_/g, ' ');
 }
 
 function formatLastSynced() {
@@ -303,6 +332,7 @@ function isTrackedContract(opportunity) {
   return (
     (opportunity.contract_progress && opportunity.contract_progress !== 'NONE')
     || (opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED')
+    || (opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED')
   );
 }
 
@@ -326,7 +356,10 @@ function ContractsDisplayPage({ workspaceType }) {
   const [selectedStatus, setSelectedStatus] = useState(restoreWorkspaceState?.selectedStatus || '');
   const [dismissedOpportunityIds, setDismissedOpportunityIds] = useState(() => readDismissedOpportunities());
   const [recentlyViewedIds, setRecentlyViewedIds] = useState(() => readRecentlyViewedContracts(workspaceType));
+<<<<<<< HEAD
+=======
   const [currentPage, setCurrentPage] = useState(1);
+>>>>>>> fd2b55a77536beddddfb55561113223d5d0a5039
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -450,6 +483,7 @@ function ContractsDisplayPage({ workspaceType }) {
         opportunity.description,
         opportunity.partner,
         opportunity.status,
+        opportunity.relationship_label,
         opportunity.naics_code,
       ]
         .filter(Boolean)
@@ -471,6 +505,8 @@ function ContractsDisplayPage({ workspaceType }) {
     });
   }, [workspaceOpportunities, searchTerm, selectedAgency, selectedPartner, selectedStatus, selectedNaics]);
 
+<<<<<<< HEAD
+=======
   const totalPages = Math.max(1, Math.ceil(filteredOpportunities.length / CONTRACTS_PER_PAGE));
 
   const paginatedOpportunities = useMemo(() => {
@@ -478,6 +514,7 @@ function ContractsDisplayPage({ workspaceType }) {
     return filteredOpportunities.slice(startIndex, startIndex + CONTRACTS_PER_PAGE);
   }, [currentPage, filteredOpportunities]);
 
+>>>>>>> fd2b55a77536beddddfb55561113223d5d0a5039
   const recentOpportunities = useMemo(() => {
     if (!recentlyViewedIds.length) {
       return [];
@@ -495,6 +532,8 @@ function ContractsDisplayPage({ workspaceType }) {
       ? recentOpportunities
       : filteredOpportunities.slice(0, 3)
   ), [config.showRecentVisits, filteredOpportunities, recentOpportunities]);
+<<<<<<< HEAD
+=======
 
   useEffect(() => {
     setCurrentPage(1);
@@ -522,6 +561,7 @@ function ContractsDisplayPage({ workspaceType }) {
       }
     }
   }, [currentPage, filteredOpportunities, loading, restoreWorkspaceState]);
+>>>>>>> fd2b55a77536beddddfb55561113223d5d0a5039
 
   useEffect(() => {
     if (loading || hasRestoredPosition.current || !restoreWorkspaceState) {
@@ -851,6 +891,66 @@ function ContractsDisplayPage({ workspaceType }) {
               ) : filteredOpportunities.length === 0 ? (
                 <div className="state-card">{config.emptyMessage}</div>
               ) : (
+<<<<<<< HEAD
+                <div className="contract-list">
+                  {filteredOpportunities.map((opportunity) => {
+                    const hasProgressTag = opportunity.contract_progress && opportunity.contract_progress !== 'NONE';
+                    const hasWorkflowTag = opportunity.workflow_status && opportunity.workflow_status !== 'NOT_STARTED';
+                    const hasRelationshipTag = opportunity.relationship_label && opportunity.relationship_label !== 'UNASSIGNED';
+
+                    return (
+                      <div
+                        key={opportunity.id}
+                        className="contract-card"
+                        data-contract-id={opportunity.id}
+                      >
+                        <div className={`card-heading-row ${(hasProgressTag || hasWorkflowTag || hasRelationshipTag) ? 'card-heading-row-with-tags' : 'card-heading-row-no-tags'}`}>
+                          <div className="card-heading-copy">
+                            <div className="title-row">
+                              <h3>{opportunity.title}</h3>
+                              <span
+                                className="summary-button"
+                                onMouseEnter={() => setHoveredId(opportunity.id)}
+                                onMouseLeave={() => setHoveredId(null)}
+                              >
+                                View Summary
+                              </span>
+                            </div>
+                            {hoveredId === opportunity.id && (
+                              <div className="summary-popup">
+                                {opportunity.description || 'No summary available.'}
+                              </div>
+                            )}
+                            {(hasProgressTag || hasWorkflowTag || hasRelationshipTag) && (
+                              <div className="tracking-tag-row">
+                                {hasProgressTag && (
+                                  <span className={getProgressStatusClass(opportunity.contract_progress)}>
+                                    {formatProgressStatus(opportunity.contract_progress)}
+                                  </span>
+                                )}
+                                {hasWorkflowTag && (
+                                  <span className={getWorkflowStatusClass(opportunity.workflow_status)}>
+                                    {formatWorkflowStatus(opportunity.workflow_status)}
+                                  </span>
+                                )}
+                                {hasRelationshipTag && (
+                                  <span className={getRelationshipLabelClass(opportunity.relationship_label)}>
+                                    {formatRelationshipLabel(opportunity.relationship_label)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="card-action-row">
+                            <button
+                              className="note-action-button"
+                              type="button"
+                              onClick={() => handleViewDetails(opportunity.id)}
+                            >
+                              View Details
+                            </button>
+                            {config.allowDismiss && (
+=======
                 <>
                   <div className="contract-list">
                     {paginatedOpportunities.map((opportunity) => {
@@ -896,12 +996,17 @@ function ContractsDisplayPage({ workspaceType }) {
                               )}
                             </div>
                             <div className="card-action-row">
+>>>>>>> fd2b55a77536beddddfb55561113223d5d0a5039
                               <button
                                 className="note-action-button"
                                 type="button"
                                 onClick={() => handleViewDetails(opportunity.id)}
                               >
+<<<<<<< HEAD
+                                {config.dismissLabel}
+=======
                                 View Details
+>>>>>>> fd2b55a77536beddddfb55561113223d5d0a5039
                               </button>
                               {config.allowDismiss && (
                                 <button
@@ -915,6 +1020,39 @@ function ContractsDisplayPage({ workspaceType }) {
                             </div>
                           </div>
 
+<<<<<<< HEAD
+                        <p className="contract-description-preview">
+                          {opportunity.description || 'No description available.'}
+                        </p>
+
+                        <p>
+                          <strong>Agency:</strong>{' '}
+                          <span className="info-pill agency-pill">{opportunity.agency || 'Not provided'}</span>
+                        </p>
+                        <p>
+                          <strong>Partner:</strong>{' '}
+                          <span className="info-pill partner-pill">{opportunity.partner || 'Not provided'}</span>
+                        </p>
+                        <p>
+                          <strong>NAICS Code:</strong>{' '}
+                          <span
+                            className={getNaicsCategoryClass(opportunity.naics_category)}
+                            title={formatNaicsCategory(opportunity.naics_category)}
+                          >
+                            {opportunity.naics_code}
+                          </span>
+                        </p>
+                        <p>
+                          <strong>Contract Status:</strong>{' '}
+                          <span className={getListingStatusClass(opportunity.status)}>
+                            {opportunity.status || 'Unknown'}
+                          </span>
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+=======
                           <p>
                             <strong>Agency:</strong>{' '}
                             <span className="info-pill agency-pill">{opportunity.agency || 'Not provided'}</span>
@@ -970,6 +1108,7 @@ function ContractsDisplayPage({ workspaceType }) {
                     </div>
                   </div>
                 </>
+>>>>>>> fd2b55a77536beddddfb55561113223d5d0a5039
               )}
             </section>
 
