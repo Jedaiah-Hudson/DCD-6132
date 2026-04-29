@@ -1,0 +1,541 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Length 2180 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+14 TL
+(Detailed Design Document) Tj
+T*
+() Tj
+T*
+(Project: AI Matchmaking Tool) Tj
+T*
+(Version: 1.0) Tj
+T*
+(Repository: https://github.com/Jedaiah-Hudson/DCD-6132/tree/Maya) Tj
+T*
+() Tj
+T*
+(Purpose) Tj
+T*
+() Tj
+T*
+(The AI Matchmaking Tool helps customers discover government contracting opportunities that) Tj
+T*
+(align with their capabilities. The application supports account management, capability) Tj
+T*
+(profile creation, opportunity ingestion, opportunity browsing, AI-assisted matching, pursuit) Tj
+T*
+(tracking, notifications, mailbox syncing, and RFP response draft generation.) Tj
+T*
+() Tj
+T*
+(Stakeholders and Users) Tj
+T*
+() Tj
+T*
+(Primary users are customer organizations that want to identify and manage contract) Tj
+T*
+(opportunities. Secondary users include instructors, project evaluators, administrators, and) Tj
+T*
+(future maintainers who need to understand the system architecture and delivery status.) Tj
+T*
+() Tj
+T*
+(System Architecture) Tj
+T*
+() Tj
+T*
+(The project uses a two-part architecture:) Tj
+T*
+() Tj
+T*
+(* Backend: Django, Django REST Framework, SQLite, and service modules for procurement) Tj
+T*
+(ingestion, mailbox integration, OCR, matchmaking, and RFP generation.) Tj
+T*
+(* Frontend: React, React Router, React Select, and Vite.) Tj
+T*
+() Tj
+T*
+(The backend exposes JSON APIs for authentication, profile data, opportunities, contract) Tj
+T*
+(progress, notifications, mailbox connections, and AI generation. The frontend consumes those) Tj
+T*
+(APIs and provides the user-facing workflow.) Tj
+T*
+() Tj
+T*
+(Backend Components) Tj
+T*
+() Tj
+T*
+(`accounts`) Tj
+T*
+() Tj
+T*
+(The `accounts` app owns user identity and mailbox connection data. It includes:) Tj
+T*
+() Tj
+T*
+(* Custom email-based `User` model.) Tj
+T*
+(* Additional linked email records.) Tj
+T*
+(* Gmail and Outlook mailbox connection models.) Tj
+T*
+(* Capability profiles connected to users.) Tj
+T*
+(* OAuth callback handling for Gmail and Outlook.) Tj
+T*
+(* Password reset request and confirmation endpoints.) Tj
+T*
+() Tj
+T*
+(`contracts`) Tj
+T*
+() Tj
+T*
+(The `contracts` app owns contract opportunity records and pursuit workflow data. It) Tj
+T*
+(includes:) Tj
+T*
+ET
+endstream
+endobj
+3 0 obj
+<< /Length 1614 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+14 TL
+() Tj
+T*
+(* Contract records from procurement portals, Gmail, or Outlook.) Tj
+T*
+(* NAICS code records.) Tj
+T*
+(* User contract progress records.) Tj
+T*
+(* Dismissed contracts.) Tj
+T*
+(* Contract notifications.) Tj
+T*
+(* Email ingestion records.) Tj
+T*
+(* RFP draft generation endpoint.) Tj
+T*
+(* SAM.gov ingestion command and sync API.) Tj
+T*
+() Tj
+T*
+(`core`) Tj
+T*
+() Tj
+T*
+(The `core` app owns dashboard-oriented views and profile/matchmaking APIs. It includes:) Tj
+T*
+() Tj
+T*
+(* Capability profile save and retrieval APIs.) Tj
+T*
+(* Capability document extraction API.) Tj
+T*
+(* Opportunity list API.) Tj
+T*
+(* Matched contract APIs.) Tj
+T*
+(* Matchmaking cache model.) Tj
+T*
+(* Rule-based and optional embedding-based scoring logic.) Tj
+T*
+() Tj
+T*
+(`config`) Tj
+T*
+() Tj
+T*
+(The `config` package owns Django settings, URL routing, WSGI, and ASGI configuration.) Tj
+T*
+() Tj
+T*
+(Frontend Components) Tj
+T*
+() Tj
+T*
+(The React frontend is located in `frontend/frontend/src/`.) Tj
+T*
+() Tj
+T*
+(Major pages include:) Tj
+T*
+() Tj
+T*
+(* `LoginPage.jsx`) Tj
+T*
+(* `CreateAccountPage.jsx`) Tj
+T*
+(* `ResetPasswordPage.jsx`) Tj
+T*
+(* `DashboardPage.jsx`) Tj
+T*
+(* `AiMatchmakingPage.jsx`) Tj
+T*
+(* `MyContractsPage.jsx`) Tj
+T*
+(* `ContractDetailPage.jsx`) Tj
+T*
+(* `RfpGeneratorPage.jsx`) Tj
+T*
+(* `ProfilePage.jsx`) Tj
+T*
+(* `NotificationsPage.jsx`) Tj
+T*
+() Tj
+T*
+(Shared UI and contract display logic is handled by components such as) Tj
+T*
+(`ContractsDisplayPage.jsx` and `NaicsMultiSelect.jsx`.) Tj
+T*
+() Tj
+T*
+(Data Design) Tj
+T*
+() Tj
+T*
+(Important data models include:) Tj
+T*
+ET
+endstream
+endobj
+4 0 obj
+<< /Length 2551 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+14 TL
+() Tj
+T*
+(* `User`: email-based authentication model.) Tj
+T*
+(* `CapabilityProfile`: company capabilities, NAICS codes, certifications, past performance,) Tj
+T*
+(contact data, matchmaking tags, and OCR text.) Tj
+T*
+(* `AdditionalEmail`: extra customer email addresses.) Tj
+T*
+(* `MailboxConnection`: Gmail/Outlook OAuth connection metadata and signed tokens.) Tj
+T*
+(* `Contract`: opportunity data including source, portal, title, summary, agency, NAICS,) Tj
+T*
+(deadline, link, status, and partner.) Tj
+T*
+(* `UserContractProgress`: per-user pursuit status, workflow status, relationship label, and) Tj
+T*
+(notes.) Tj
+T*
+(* `DismissedContract`: opportunities hidden by a user.) Tj
+T*
+(* `ContractNotification`: deadline, status, progress, and workflow notifications.) Tj
+T*
+(* `EmailIngestionMessage`: mailbox messages processed during sync.) Tj
+T*
+(* `MailboxContract`: relationships between mailbox messages and contract records.) Tj
+T*
+(* `UserMatchmakingCache`: cached AI/rule-based match results for a user.) Tj
+T*
+() Tj
+T*
+(Major Workflows) Tj
+T*
+() Tj
+T*
+(Account and Profile Workflow) Tj
+T*
+() Tj
+T*
+(1. User creates an account or logs in.) Tj
+T*
+(2. User creates or edits a capability profile.) Tj
+T*
+(3. User may upload a capability statement document for OCR extraction.) Tj
+T*
+(4. User selects NAICS codes and matchmaking preferences.) Tj
+T*
+(5. Profile data becomes available for contract matching and RFP generation.) Tj
+T*
+() Tj
+T*
+(Opportunity Discovery Workflow) Tj
+T*
+() Tj
+T*
+(1. Procurement opportunities are added through SAM.gov ingestion or existing data.) Tj
+T*
+(2. Authenticated users can browse opportunities.) Tj
+T*
+(3. Users can filter and search by NAICS, agency, status, partner, and keywords.) Tj
+T*
+(4. Users can open contract detail pages for richer review.) Tj
+T*
+() Tj
+T*
+(Matchmaking Workflow) Tj
+T*
+() Tj
+T*
+(1. The backend reads the user's capability profile.) Tj
+T*
+(2. The backend compares profile fields, NAICS codes, keywords, certifications, timeline) Tj
+T*
+(data, and optional embeddings against visible contracts.) Tj
+T*
+(3. The system returns match scores, percentages, strongest alignment, weak alignment, and) Tj
+T*
+(match reasons.) Tj
+T*
+(4. Results are cached for reuse until the user refreshes matches.) Tj
+T*
+() Tj
+T*
+(Contract Management Workflow) Tj
+T*
+() Tj
+T*
+(1. User marks progress for a contract.) Tj
+T*
+(2. User updates workflow stage and relationship label.) Tj
+T*
+(3. User adds notes.) Tj
+T*
+(4. User can dismiss opportunities that are not relevant.) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Length 2143 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+14 TL
+(5. Notifications are created for progress changes, workflow changes, status changes, and) Tj
+T*
+(approaching deadlines.) Tj
+T*
+() Tj
+T*
+(Mailbox Workflow) Tj
+T*
+() Tj
+T*
+(1. User connects Gmail or Outlook using OAuth.) Tj
+T*
+(2. Backend stores mailbox connection metadata.) Tj
+T*
+(3. User triggers mailbox sync.) Tj
+T*
+(4. Emails are filtered for opportunity-like content.) Tj
+T*
+(5. Matching messages are recorded and can be associated with contract records.) Tj
+T*
+() Tj
+T*
+(RFP Draft Workflow) Tj
+T*
+() Tj
+T*
+(1. User selects a contract.) Tj
+T*
+(2. Backend loads the user's latest capability profile.) Tj
+T*
+(3. Backend builds a prompt from contract data and capability profile data.) Tj
+T*
+(4. OpenAI service returns a draft response.) Tj
+T*
+(5. Frontend displays the generated draft for user review.) Tj
+T*
+() Tj
+T*
+(External Integrations) Tj
+T*
+() Tj
+T*
+(* SAM.gov API for procurement opportunity ingestion.) Tj
+T*
+(* OpenAI API for embeddings and RFP response generation.) Tj
+T*
+(* Google Gmail API for mailbox read access.) Tj
+T*
+(* Microsoft Graph API for Outlook mailbox read access.) Tj
+T*
+(* SMTP email service for password reset email.) Tj
+T*
+(* Tesseract OCR for extracting text from image-based documents.) Tj
+T*
+() Tj
+T*
+(Security Design) Tj
+T*
+() Tj
+T*
+(The system uses Django authentication, token authentication for API access, OAuth state) Tj
+T*
+(validation for mailbox callbacks, and signed mailbox tokens to detect tampering. Production) Tj
+T*
+(hardening is still required before public deployment. Recommended production improvements) Tj
+T*
+(include:) Tj
+T*
+() Tj
+T*
+(* Move `SECRET_KEY` to environment variables.) Tj
+T*
+(* Set `DEBUG=False`.) Tj
+T*
+(* Configure `ALLOWED_HOSTS`.) Tj
+T*
+(* Use HTTPS.) Tj
+T*
+(* Encrypt OAuth tokens at rest.) Tj
+T*
+(* Remove development reset-link placeholders.) Tj
+T*
+(* Rotate all credentials used during testing.) Tj
+T*
+() Tj
+T*
+(Known Design Constraints) Tj
+T*
+() Tj
+T*
+(* The current delivery is intended for local/development use.) Tj
+T*
+(* SQLite is used by default.) Tj
+T*
+(* External integrations require customer-managed API credentials.) Tj
+T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Length 1559 >>
+stream
+BT
+/F1 10 Tf
+50 760 Td
+14 TL
+(* OCR quality depends on document quality and local Tesseract installation.) Tj
+T*
+(* RFP draft output must be reviewed by a human before use.) Tj
+T*
+(* End-to-end browser automation is not included in this release.) Tj
+T*
+() Tj
+T*
+(Testing Strategy) Tj
+T*
+() Tj
+T*
+(Backend unit tests exist for account, profile, matchmaking, SAM.gov, OAuth, and contract-) Tj
+T*
+(related behavior. Frontend linting is configured through ESLint. Future releases should add) Tj
+T*
+(full end-to-end workflow tests for authentication, profile creation, matching, contract) Tj
+T*
+(tracking, mailbox sync, and RFP generation.) Tj
+T*
+() Tj
+T*
+(Deployment Notes) Tj
+T*
+() Tj
+T*
+(For this release, the recommended customer evaluation mode is local execution:) Tj
+T*
+() Tj
+T*
+(* Django backend at `http://127.0.0.1:8000`.) Tj
+T*
+(* React frontend at `http://localhost:5173`.) Tj
+T*
+() Tj
+T*
+(Before production deployment, the customer or maintainer should add a production settings) Tj
+T*
+(file, configure a production database, configure static asset hosting, configure HTTPS, and) Tj
+T*
+(set all secrets through a secure environment or secret manager.) Tj
+T*
+() Tj
+T*
+(Maintenance Priorities) Tj
+T*
+() Tj
+T*
+(1. Production security hardening.) Tj
+T*
+(2. Encrypted OAuth token storage.) Tj
+T*
+(3. Deployment documentation for the customer's target hosting environment.) Tj
+T*
+(4. End-to-end test coverage.) Tj
+T*
+(5. Better admin tools for reviewing ingested mailbox messages.) Tj
+T*
+(6. Improved error reporting for external service failures.) Tj
+T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 2 0 R >>
+endobj
+8 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 3 0 R >>
+endobj
+9 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 4 0 R >>
+endobj
+10 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 5 0 R >>
+endobj
+11 0 obj
+<< /Type /Page /Parent 12 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R >> >> /Contents 6 0 R >>
+endobj
+12 0 obj
+<< /Type /Pages /Kids [7 0 R 8 0 R 9 0 R 10 0 R 11 0 R] /Count 5 >>
+endobj
+13 0 obj
+<< /Type /Catalog /Pages 12 0 R >>
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000002317 00000 n 
+0000003983 00000 n 
+0000006586 00000 n 
+0000008781 00000 n 
+0000010392 00000 n 
+0000010519 00000 n 
+0000010646 00000 n 
+0000010773 00000 n 
+0000010901 00000 n 
+0000011029 00000 n 
+0000011113 00000 n 
+trailer
+<< /Size 14 /Root 13 0 R >>
+startxref
+11164
+%%EOF
