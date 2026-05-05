@@ -469,9 +469,9 @@ function writeRecentlyViewedContracts(workspaceType, ids) {
   }
 }
 
-async function syncSamOpportunities(limit = 10) {
+async function syncSamOpportunities(limit = 15) {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+  const timeoutId = window.setTimeout(() => controller.abort(), 30000);
 
   try {
     const response = await fetch('http://127.0.0.1:8000/api/sam/sync/', {
@@ -919,7 +919,8 @@ function ContractsDisplayPage({ workspaceType }) {
     setSyncNotice('');
 
     try {
-      await syncSamOpportunities(10);
+      const syncData = await syncSamOpportunities(15);
+      const syncResult = syncData?.result || {};
 
       const summaryPromise = config.showSummary
         ? fetchProgressSummary(undefined, token)
@@ -937,7 +938,9 @@ function ContractsDisplayPage({ workspaceType }) {
       }
 
       setLastSynced(formatLastSynced());
-      setSyncNotice('Contracts synced successfully.');
+      setSyncNotice(
+        `Contracts synced: ${syncResult.count_created || 0} new, ${syncResult.count_updated || 0} updated.`,
+      );
     } catch (fetchError) {
       const isNetworkError = fetchError instanceof TypeError;
       const isTimeoutError = fetchError.name === 'AbortError';

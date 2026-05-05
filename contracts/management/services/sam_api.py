@@ -1,4 +1,6 @@
 import os
+import queue
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -10,6 +12,8 @@ BASE_DIR = Path(__file__).resolve().parents[3]
 load_dotenv(BASE_DIR / ".env")
 
 SAM_OPPORTUNITIES_URL = "https://api.sam.gov/prod/opportunities/v2/search"
+SAM_SEARCH_TIMEOUT_SECONDS = 30
+SAM_BATCH_SIZE = 15
 
 
 class SamApiError(Exception):
@@ -53,6 +57,34 @@ def _build_sam_http_error_message(response):
     return default_message
 
 
+def _get_sam_response_with_timeout(requests_module, params):
+    result_queue = queue.Queue(maxsize=1)
+
+    def make_request():
+        try:
+            response = requests_module.get(
+                SAM_OPPORTUNITIES_URL,
+                params=params,
+                timeout=(5, 5),
+            )
+        except Exception as exc:
+            result_queue.put((None, exc))
+            return
+        result_queue.put((response, None))
+
+    request_thread = threading.Thread(target=make_request, daemon=True)
+    request_thread.start()
+    request_thread.join(SAM_SEARCH_TIMEOUT_SECONDS)
+
+    if request_thread.is_alive():
+        raise requests_module.exceptions.Timeout()
+
+    response, error = result_queue.get()
+    if error:
+        raise error
+    return response
+
+
 def fetch_sam_opportunities(
     notice_type=None,
     posted_from=None,
@@ -89,7 +121,7 @@ def fetch_sam_opportunities(
         params["ncode"] = naics_code
 
     try:
-        response = requests.get(SAM_OPPORTUNITIES_URL, params=params, timeout=60)
+        response = _get_sam_response_with_timeout(requests, params)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.Timeout:
@@ -116,16 +148,18 @@ def ingest_sam_opportunities(
     naics_code=None,
     limit=10,
     offset=0,
+    max_batches=5,
 ):
     total_ingested = 0
     count_created = 0
     count_updated = 0
-    batch_size = 5
+    batch_size = SAM_BATCH_SIZE
+    batches_scanned = 0
 
     results = []
     raw_total_records = None
 
-    while total_ingested < limit:
+    while count_created < limit and batches_scanned < max_batches:
         payload = fetch_sam_opportunities(
             notice_type=notice_type,
             posted_from=posted_from,
@@ -135,6 +169,7 @@ def ingest_sam_opportunities(
             limit=batch_size,
             offset=offset,
         )
+        batches_scanned += 1
 
         if raw_total_records is None:
             raw_total_records = payload.get("totalRecords")
@@ -166,7 +201,7 @@ def ingest_sam_opportunities(
 
             total_ingested += 1
 
-            if total_ingested >= limit:
+            if count_created >= limit:
                 break
 
         offset += batch_size
@@ -177,4 +212,5 @@ def ingest_sam_opportunities(
         "count_updated": count_updated,
         "results": results,
         "raw_total_records": raw_total_records,
+        "batches_scanned": batches_scanned,
     }

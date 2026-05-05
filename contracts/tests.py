@@ -10,17 +10,14 @@ from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from accounts.models import CapabilityProfile, User
-from contracts.management.services.procurement_ingest import normalize_procurement_record
-from contracts.management.services.sam_api import SamApiError, fetch_sam_opportunities, ingest_sam_opportunities
+from contracts.management.services.procurement_ingest import DESCRIPTION_FETCH_TIMEOUT_SECONDS, fetch_description_text, normalize_procurement_record
+from contracts.management.services.sam_api import SAM_BATCH_SIZE, SAM_SEARCH_TIMEOUT_SECONDS, SamApiError, fetch_sam_opportunities, ingest_sam_opportunities
 from contracts.models import Contract, ContractNotification, DismissedContract, NAICSCode, UserContractProgress
 
 
 class ProcurementIngestTests(TestCase):
-    @patch(
-        "contracts.management.services.procurement_ingest.fetch_description_text",
-        return_value="Detailed procurement notice",
-    )
-    def test_normalize_sam_record_uses_sam_field_mapping(self, _fetch_description_text):
+    @patch("contracts.management.services.procurement_ingest.fetch_description_text")
+    def test_normalize_sam_record_uses_sam_field_mapping_without_detail_fetch(self, mock_fetch_description):
         record = {
             "title": "SAM Opportunity",
             "description": "https://sam.gov/notice/123",
@@ -35,7 +32,7 @@ class ProcurementIngestTests(TestCase):
         normalized = normalize_procurement_record(record, "sam")
 
         self.assertEqual(normalized["title"], "SAM Opportunity")
-        self.assertEqual(normalized["summary"], "Detailed procurement notice")
+        self.assertEqual(normalized["summary"], "No description Provided")
         self.assertEqual(normalized["agency"], "Department of Energy")
         self.assertEqual(normalized["sub_agency"], "Office of Science")
         self.assertEqual(normalized["naics_code"], "541512")
@@ -43,6 +40,35 @@ class ProcurementIngestTests(TestCase):
         self.assertEqual(normalized["status"], "Active")
         self.assertEqual(normalized["partner_name"], "Alex Buyer")
         self.assertEqual(normalized["procurement_portal"], "SAM.gov")
+        mock_fetch_description.assert_not_called()
+
+    @patch("contracts.management.services.procurement_ingest.fetch_description_text")
+    def test_normalize_sam_record_uses_inline_description_without_extra_fetch(self, mock_fetch_description):
+        record = {
+            "title": "SAM Inline Opportunity",
+            "description": "<p>Inline notice summary</p>",
+            "uiLink": "https://sam.gov/example-inline",
+            "active": "Yes",
+        }
+
+        normalized = normalize_procurement_record(record, "sam")
+
+        self.assertEqual(normalized["summary"], "Inline notice summary")
+        mock_fetch_description.assert_not_called()
+
+    @patch.dict("os.environ", {"SAM_API_KEY": "live-test-key"})
+    @patch("contracts.management.services.procurement_ingest.requests.get")
+    def test_fetch_description_text_uses_short_timeout_and_live_api_key(self, mock_get):
+        mock_get.return_value.json.return_value = {"description": "<p>Detailed notice</p>"}
+
+        description = fetch_description_text("https://sam.gov/notice/123")
+
+        self.assertEqual(description, "Detailed notice")
+        mock_get.assert_called_once_with(
+            "https://sam.gov/notice/123",
+            params={"api_key": "live-test-key"},
+            timeout=DESCRIPTION_FETCH_TIMEOUT_SECONDS,
+        )
 
 
 class IngestSamOpportunitiesCommandTests(TestCase):
@@ -80,6 +106,7 @@ class IngestSamOpportunitiesCommandTests(TestCase):
             naics_code="541512",
             limit=5,
             offset=0,
+            max_batches=5,
         )
         output = stdout.getvalue()
         self.assertIn("Ingested 1 opportunities from SAM.gov.", output)
@@ -90,6 +117,15 @@ class IngestSamOpportunitiesCommandTests(TestCase):
 
 
 class SamApiErrorHandlingTests(TestCase):
+    @patch("contracts.management.services.sam_api.get_sam_api_key", return_value="test-key")
+    @patch("requests.get")
+    def test_fetch_sam_opportunities_uses_dashboard_friendly_timeout(self, mock_get, _get_sam_api_key):
+        mock_get.return_value.json.return_value = {"opportunitiesData": []}
+
+        fetch_sam_opportunities(limit=1)
+
+        self.assertEqual(mock_get.call_args.kwargs["timeout"], (5, 5))
+
     @patch("contracts.management.services.sam_api.get_sam_api_key", return_value="test-key")
     @patch("requests.get")
     def test_fetch_sam_opportunities_formats_rate_limit_error(self, mock_get, _get_sam_api_key):
@@ -124,23 +160,23 @@ class SamApiErrorHandlingTests(TestCase):
 
     @patch("contracts.management.services.sam_api.ingest_procurement_record")
     @patch("contracts.management.services.sam_api.fetch_sam_opportunities")
-    def test_ingest_sam_opportunities_uses_five_record_batches(self, mock_fetch, mock_ingest):
+    def test_ingest_sam_opportunities_uses_fifteen_record_batches(self, mock_fetch, mock_ingest):
         records = [
             {
                 "title": f"SAM Opportunity {index}",
                 "description": f"Description {index}",
                 "uiLink": f"https://sam.gov/{index}",
             }
-            for index in range(10)
+            for index in range(20)
         ]
         mock_fetch.side_effect = [
             {
-                "totalRecords": 10,
-                "opportunitiesData": records[:5],
+                "totalRecords": 20,
+                "opportunitiesData": records[:15],
             },
             {
-                "totalRecords": 10,
-                "opportunitiesData": records[5:],
+                "totalRecords": 20,
+                "opportunitiesData": records[15:],
             },
         ]
 
@@ -156,14 +192,63 @@ class SamApiErrorHandlingTests(TestCase):
 
         mock_ingest.side_effect = ingest_record
 
-        result = ingest_sam_opportunities(limit=10)
+        result = ingest_sam_opportunities(limit=20)
 
-        self.assertEqual(result["count_ingested"], 10)
+        self.assertEqual(result["count_ingested"], 20)
         self.assertEqual(mock_fetch.call_count, 2)
-        self.assertEqual(mock_fetch.call_args_list[0].kwargs["limit"], 5)
+        self.assertEqual(mock_fetch.call_args_list[0].kwargs["limit"], SAM_BATCH_SIZE)
         self.assertEqual(mock_fetch.call_args_list[0].kwargs["offset"], 0)
-        self.assertEqual(mock_fetch.call_args_list[1].kwargs["limit"], 5)
-        self.assertEqual(mock_fetch.call_args_list[1].kwargs["offset"], 5)
+        self.assertEqual(mock_fetch.call_args_list[1].kwargs["limit"], SAM_BATCH_SIZE)
+        self.assertEqual(mock_fetch.call_args_list[1].kwargs["offset"], SAM_BATCH_SIZE)
+
+    @patch("contracts.management.services.sam_api.ingest_procurement_record")
+    @patch("contracts.management.services.sam_api.fetch_sam_opportunities")
+    def test_ingest_sam_opportunities_scans_past_duplicate_first_page(self, mock_fetch, mock_ingest):
+        duplicate_records = [
+            {
+                "title": f"Duplicate SAM Opportunity {index}",
+                "description": f"Description {index}",
+                "uiLink": f"https://sam.gov/duplicate/{index}",
+            }
+            for index in range(15)
+        ]
+        new_records = [
+            {
+                "title": f"New SAM Opportunity {index}",
+                "description": f"Description {index}",
+                "uiLink": f"https://sam.gov/new/{index}",
+            }
+            for index in range(3)
+        ]
+        mock_fetch.side_effect = [
+            {
+                "totalRecords": 18,
+                "opportunitiesData": duplicate_records,
+            },
+            {
+                "totalRecords": 18,
+                "opportunitiesData": new_records,
+            },
+        ]
+
+        def ingest_record(record, source_name):
+            contract = Contract.objects.create(
+                source=Contract.SourceType.PROCUREMENT,
+                title=record["title"],
+                summary=record["description"],
+                agency="SAM",
+                hyperlink=record["uiLink"],
+            )
+            return contract, record["title"].startswith("New")
+
+        mock_ingest.side_effect = ingest_record
+
+        result = ingest_sam_opportunities(limit=3)
+
+        self.assertEqual(result["count_created"], 3)
+        self.assertEqual(result["count_updated"], 15)
+        self.assertEqual(result["batches_scanned"], 2)
+        self.assertEqual(mock_fetch.call_args_list[1].kwargs["offset"], SAM_BATCH_SIZE)
 
     @patch("contracts.management.services.sam_api.ingest_procurement_record")
     @patch("contracts.management.services.sam_api.fetch_sam_opportunities")
@@ -197,7 +282,7 @@ class SamApiErrorHandlingTests(TestCase):
 
         self.assertEqual(result["count_ingested"], 3)
         mock_fetch.assert_called_once()
-        self.assertEqual(mock_fetch.call_args.kwargs["limit"], 5)
+        self.assertEqual(mock_fetch.call_args.kwargs["limit"], SAM_BATCH_SIZE)
 
 
 class UserContractProgressApiTests(APITestCase):

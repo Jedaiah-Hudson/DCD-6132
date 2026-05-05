@@ -9,6 +9,14 @@ import html
 import requests
 
 
+DESCRIPTION_FETCH_TIMEOUT_SECONDS = 2
+
+
+def _clean_description_text(description):
+    description = html.unescape(description or "")
+    description = re.sub(r"<[^>]+>", "", description)
+    return re.sub(r"\s+", " ", description).strip()
+
 
 def normalize_procurement_record(raw_record, source_name):
     """
@@ -38,9 +46,18 @@ def normalize_procurement_record(raw_record, source_name):
         title = raw_record.get("title")
         procurement_portal = "SAM.gov"
 
-        summary_url = raw_record.get("description")
+        summary_source = (
+            raw_record.get("description")
+            or raw_record.get("noticeDescription")
+            or raw_record.get("descriptionText")
+            or raw_record.get("body")
+            or ""
+        )
 
-        summary = fetch_description_text(summary_url)
+        if str(summary_source).strip().lower().startswith(("http://", "https://")):
+            summary = ""
+        else:
+            summary = _clean_description_text(summary_source)
         if not summary:
             summary = "No description Provided"
 
@@ -122,18 +139,20 @@ def ingest_procurement_record(raw_record, source_name):
 
     return contract, created
 
-SAM_API_KEY = os.environ.get("SAM_API_KEY")
-
-
 def fetch_description_text(url):
     if not url:
         return ""
 
+    params = {}
+    api_key = os.environ.get("SAM_API_KEY")
+    if api_key:
+        params["api_key"] = api_key
+
     try:
         response = requests.get(
             url,
-            params={"api_key": SAM_API_KEY},
-            timeout=10
+            params=params,
+            timeout=DESCRIPTION_FETCH_TIMEOUT_SECONDS,
         )
 
         response.raise_for_status()
@@ -147,16 +166,7 @@ def fetch_description_text(url):
             or ""
         )
 
-        # Decode HTML entities
-        description = html.unescape(description)
-
-        # Strip HTML tags
-        description = re.sub(r"<[^>]+>", "", description)
-
-        # Normalize whitespace
-        description = re.sub(r"\s+", " ", description).strip()
-
-        return description
+        return _clean_description_text(description)
 
     except Exception as e:
         print("DESC FETCH ERROR:", e)

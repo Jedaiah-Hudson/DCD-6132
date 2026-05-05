@@ -78,6 +78,15 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+Scanned PDFs and image uploads also need the Tesseract system binary. On macOS:
+
+```bash
+brew install tesseract
+tesseract --version
+```
+
+Restart your terminal and Django server after installing it so the updated PATH is available.
+
 In a second terminal:
 
 ```bash

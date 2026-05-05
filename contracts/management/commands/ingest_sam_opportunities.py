@@ -47,6 +47,12 @@ class Command(BaseCommand):
             default=0,
             help="Offset into the SAM.gov search result set.",
         )
+        parser.add_argument(
+            "--max-batches",
+            type=int,
+            default=5,
+            help="Maximum number of SAM.gov result pages to scan while looking for new records.",
+        )
 
     def handle(self, *args, **options):
         from contracts.management.services.sam_api import ingest_sam_opportunities
@@ -60,6 +66,7 @@ class Command(BaseCommand):
                 naics_code=options["naics_code"],
                 limit=options["limit"],
                 offset=options["offset"],
+                max_batches=options["max_batches"],
             )
         except Exception as exc:
             raise CommandError(str(exc)) from exc

@@ -101,6 +101,26 @@ def _profile_oauth_redirect(provider, outcome, message='', account_id=None):
     return redirect(f"{settings.FRONTEND_BASE_URL}/profile?{urlencode(params)}")
 
 
+def _provider_error_message(response, fallback):
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+
+    if isinstance(payload, dict):
+        provider_error = payload.get('error')
+        description = payload.get('error_description') or payload.get('message') or ''
+        if provider_error and description:
+            return f"{provider_error}: {description}"
+        if provider_error:
+            return str(provider_error)
+        if description:
+            return str(description)
+
+    response_text = (getattr(response, 'text', '') or '').strip()
+    return response_text or fallback
+
+
 # view to login api endpoints
 @api_view(['POST'])
 def login_api(request):
@@ -485,7 +505,11 @@ def gmail_callback(request):
     )
 
     if token_response.status_code != 200:
-        return _profile_oauth_redirect('gmail', 'error', 'Failed to exchange Gmail authorization code.')
+        error_message = _provider_error_message(
+            token_response,
+            'Failed to exchange Gmail authorization code.',
+        )
+        return _profile_oauth_redirect('gmail', 'error', f"Failed to exchange Gmail authorization code: {error_message}")
 
     token_data = token_response.json()
     access_token = token_data.get('access_token')

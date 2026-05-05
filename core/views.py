@@ -158,6 +158,8 @@ def serialize_contract_opportunities(request, contracts, match_metadata=None):
                 'source': contract.source or '',
                 'deadline': contract.deadline,
                 'hyperlink': contract.hyperlink or '',
+                'created_at': contract.created_at,
+                'updated_at': contract.updated_at,
                 'contract_progress': progress_map.get(contract.id, {}).get(
                     'contract_progress',
                     UserContractProgress.ProgressChoices.NONE,
@@ -459,7 +461,7 @@ class OpportunityListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        contracts = Contract.objects.all().order_by('deadline', '-created_at')
+        contracts = Contract.objects.all().order_by('-created_at', 'deadline')
 
         naics_code = (request.query_params.get('naics_code') or '').strip()
         agency = (request.query_params.get('agency') or '').strip()
@@ -657,7 +659,7 @@ def _serialize_opportunities_for_user(contracts, user, profile_naics_map=None, i
 
 
 def _visible_contracts_for_user(user):
-    contracts = Contract.objects.all().order_by('deadline', '-created_at')
+    contracts = Contract.objects.all().order_by('-created_at', 'deadline')
     mailbox_contract_ids = MailboxContract.objects.filter(
         user=user,
     ).values_list('contract_id', flat=True)

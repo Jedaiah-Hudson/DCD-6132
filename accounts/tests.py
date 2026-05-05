@@ -239,6 +239,27 @@ class GmailOAuthApiTests(APITestCase):
         self.assertIn('message=Invalid+or+expired+OAuth+state.', response.url)
         self.assertFalse(ConnectedAccount.objects.exists())
 
+    @patch('accounts.views.requests.post')
+    def test_gmail_callback_redirects_token_exchange_error_detail_to_profile(self, mock_post):
+        signer = signing.TimestampSigner(salt='gmail-oauth-state')
+        oauth_state = signer.sign(str(self.user.id))
+
+        mock_post.return_value.status_code = 400
+        mock_post.return_value.json.return_value = {
+            'error': 'invalid_grant',
+            'error_description': 'Bad Request',
+        }
+
+        response = self.client.get(
+            '/accounts/gmail/callback/',
+            {'code': 'auth-code', 'state': oauth_state},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/profile?gmail=error', response.url)
+        self.assertIn('invalid_grant%3A+Bad+Request', response.url)
+        self.assertFalse(ConnectedAccount.objects.exists())
+
     @patch('accounts.views.requests.get')
     @patch('accounts.views.requests.post')
     def test_gmail_callback_redirects_profile_fetch_failure_to_profile(self, mock_post, mock_get):
@@ -355,7 +376,7 @@ class ConnectedAccountSyncServiceTests(APITestCase):
                 return response
             response.json = lambda: {
                 'id': 'gmail-message-1',
-                'snippet': 'Attached is the RFP package for this contract opportunity.',
+                'snippet': 'Solicitation ID: RFP-2026-001. Attached is the RFP package for this contract opportunity.',
                 'payload': {
                     'headers': [
                         {'name': 'Subject', 'value': 'New RFP contract opportunity'},
@@ -388,6 +409,124 @@ class ConnectedAccountSyncServiceTests(APITestCase):
                 provider_message_id='gmail-message-1',
             ).exists()
         )
+        list_request = mock_request.call_args_list[0]
+        self.assertEqual(
+            list_request.kwargs['params'],
+            {
+                'maxResults': 1,
+                'q': 'category:primary',
+            },
+        )
+
+    @patch('accounts.services.requests.request')
+    def test_sync_selected_gmail_mailbox_skips_emoji_subjects(self, mock_request):
+        account = self._connected_account('gmail', 'gmailbox@example.com')
+
+        def response_for(method, url, **kwargs):
+            response = type('Response', (), {})()
+            response.status_code = 200
+            if url.endswith('/messages'):
+                response.json = lambda: {
+                    'messages': [
+                        {'id': 'emoji-message'},
+                        {'id': 'plain-message'},
+                    ]
+                }
+                return response
+            if url.endswith('/emoji-message'):
+                response.json = lambda: {
+                    'id': 'emoji-message',
+                    'snippet': 'Solicitation ID: RFP-2026-EMOJI. Attached is the RFP package for this contract opportunity.',
+                    'payload': {
+                        'headers': [
+                            {'name': 'Subject', 'value': 'New RFP contract opportunity 🚀'},
+                            {'name': 'From', 'value': 'promo@example.com'},
+                        ],
+                        'body': {},
+                    },
+                }
+                return response
+            response.json = lambda: {
+                'id': 'plain-message',
+                'snippet': 'Solicitation ID: RFP-2026-PLAIN. Attached is the RFP package for this contract opportunity.',
+                'payload': {
+                    'headers': [
+                        {'name': 'Subject', 'value': 'Plain RFP contract opportunity'},
+                        {'name': 'From', 'value': 'buyer@example.gov'},
+                    ],
+                    'body': {},
+                },
+            }
+            return response
+
+        mock_request.side_effect = response_for
+
+        response = self.client.post(
+            f'/accounts/connected-accounts/{account.id}/sync/',
+            {'limit': 2},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mailbox']['matched_count'], 1)
+        self.assertFalse(Contract.objects.filter(title='New RFP contract opportunity 🚀').exists())
+        self.assertTrue(Contract.objects.filter(title='Plain RFP contract opportunity').exists())
+
+    @patch('accounts.services.requests.request')
+    def test_sync_selected_gmail_mailbox_skips_messages_without_solicitation_id(self, mock_request):
+        account = self._connected_account('gmail', 'gmailbox@example.com')
+
+        def response_for(method, url, **kwargs):
+            response = type('Response', (), {})()
+            response.status_code = 200
+            if url.endswith('/messages'):
+                response.json = lambda: {
+                    'messages': [
+                        {'id': 'missing-solicitation-id'},
+                        {'id': 'has-solicitation-id'},
+                    ]
+                }
+                return response
+            if url.endswith('/missing-solicitation-id'):
+                response.json = lambda: {
+                    'id': 'missing-solicitation-id',
+                    'snippet': 'Attached is the RFP package for this contract opportunity.',
+                    'payload': {
+                        'headers': [
+                            {'name': 'Subject', 'value': 'RFP contract opportunity without identifier'},
+                            {'name': 'From', 'value': 'buyer@example.gov'},
+                        ],
+                        'body': {},
+                    },
+                }
+                return response
+            response.json = lambda: {
+                'id': 'has-solicitation-id',
+                'snippet': 'Solicitation ID: RFP-2026-002. Attached is the RFP package for this contract opportunity.',
+                'payload': {
+                    'headers': [
+                        {'name': 'Subject', 'value': 'RFP contract opportunity with identifier'},
+                        {'name': 'From', 'value': 'buyer@example.gov'},
+                    ],
+                    'body': {},
+                },
+            }
+            return response
+
+        mock_request.side_effect = response_for
+
+        response = self.client.post(
+            f'/accounts/connected-accounts/{account.id}/sync/',
+            {'limit': 2},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['mailbox']['matched_count'], 1)
+        self.assertFalse(Contract.objects.filter(title='RFP contract opportunity without identifier').exists())
+        self.assertTrue(Contract.objects.filter(title='RFP contract opportunity with identifier').exists())
 
     @patch('accounts.services.requests.request')
     def test_sync_selected_outlook_mailbox_reads_contract_messages(self, mock_request):
@@ -399,7 +538,7 @@ class ConnectedAccountSyncServiceTests(APITestCase):
                 {
                     'id': 'outlook-message-1',
                     'subject': 'Solicitation for proposal support',
-                    'bodyPreview': 'Please review this procurement bid opportunity.',
+                    'bodyPreview': 'Solicitation ID: SOL-2026-OUTLOOK. Please review this procurement bid opportunity.',
                     'receivedDateTime': '2026-04-24T10:00:00Z',
                     'from': {'emailAddress': {'address': 'buyer@example.gov'}},
                     'webLink': 'https://outlook.office.com/mail/item/outlook-message-1',
@@ -451,7 +590,7 @@ class ConnectedAccountSyncServiceTests(APITestCase):
             if 'gmail.googleapis.com' in url:
                 response.json = lambda: {
                     'id': 'gmail-message-all',
-                    'snippet': 'Contract bid details',
+                    'snippet': 'Solicitation ID: SOL-2026-GMAIL. Contract bid details',
                     'payload': {
                         'headers': [
                             {'name': 'Subject', 'value': 'Gmail contract bid'},
@@ -466,7 +605,7 @@ class ConnectedAccountSyncServiceTests(APITestCase):
                     {
                         'id': 'outlook-message-all',
                         'subject': 'Outlook RFP notice',
-                        'bodyPreview': 'Proposal opportunity details',
+                        'bodyPreview': 'Solicitation ID: SOL-2026-OUTLOOK. Proposal opportunity details',
                         'from': {'emailAddress': {'address': 'buyer@example.gov'}},
                         'webLink': 'https://outlook.office.com/mail/item/outlook-message-all',
                     }
@@ -576,6 +715,34 @@ class ConnectedAccountSyncServiceTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(response.data['success'])
         self.assertEqual(response.data['error'], 'Provider token expired.')
+        account.refresh_from_db()
+        self.assertIsNone(account.last_synced_at)
+
+    @patch('accounts.services.requests.request')
+    def test_sync_selected_mailbox_returns_provider_error_detail(self, mock_request):
+        account = self._connected_account('gmail', 'gmailbox@example.com')
+        response_payload = type('Response', (), {})()
+        response_payload.status_code = 400
+        response_payload.json = lambda: {
+            'error': {
+                'message': 'Invalid Gmail search query.',
+            }
+        }
+        mock_request.return_value = response_payload
+
+        response = self.client.post(
+            f'/accounts/connected-accounts/{account.id}/sync/',
+            {'limit': 1},
+            format='json',
+            **self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data['success'])
+        self.assertEqual(
+            response.data['error'],
+            'Mailbox provider request failed with status 400: Invalid Gmail search query.',
+        )
         account.refresh_from_db()
         self.assertIsNone(account.last_synced_at)
 

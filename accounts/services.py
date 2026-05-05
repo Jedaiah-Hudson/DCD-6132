@@ -33,6 +33,28 @@ CONTRACT_KEYWORDS = [
     "sam.gov",
 ]
 
+SOLICITATION_ID_PATTERN = re.compile(
+    r"\b(?:solicitation|solicitation\s+id|solicitation\s+number|solicitation\s+no\.?|solicitation\s+#|notice\s+id|opportunity\s+id)"
+    r"\s*[:#\-]\s*([A-Z0-9][A-Z0-9._/\-]{2,})\b",
+    re.IGNORECASE,
+)
+
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001f1e6-\U0001f1ff"
+    "\U0001f300-\U0001f5ff"
+    "\U0001f600-\U0001f64f"
+    "\U0001f680-\U0001f6ff"
+    "\U0001f700-\U0001f77f"
+    "\U0001f780-\U0001f7ff"
+    "\U0001f800-\U0001f8ff"
+    "\U0001f900-\U0001f9ff"
+    "\U0001fa00-\U0001fa6f"
+    "\U0001fa70-\U0001faff"
+    "\u2600-\u27bf"
+    "]"
+)
+
 GMAIL_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GMAIL_MESSAGES_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
 OUTLOOK_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
@@ -264,6 +286,15 @@ def _matched_contract_terms(*values):
     return [keyword for keyword in CONTRACT_KEYWORDS if keyword in haystack]
 
 
+def _has_emoji(value):
+    return bool(EMOJI_PATTERN.search(value or ""))
+
+
+def _has_solicitation_id(*values):
+    text = "\n".join(value or "" for value in values)
+    return bool(SOLICITATION_ID_PATTERN.search(text))
+
+
 def _parse_message_datetime(value):
     parsed = parse_datetime(value or "")
     if not parsed:
@@ -283,7 +314,25 @@ def _request_json(method, url, *, headers=None, params=None, data=None, timeout=
         timeout=timeout,
     )
     if response.status_code >= 400:
-        raise MailboxSyncError(f"Mailbox provider request failed with status {response.status_code}.")
+        error_message = ""
+        try:
+            error_payload = response.json()
+        except ValueError:
+            error_payload = None
+
+        if isinstance(error_payload, dict):
+            provider_error = error_payload.get("error")
+            if isinstance(provider_error, dict):
+                error_message = provider_error.get("message") or provider_error.get("error_description") or ""
+            elif isinstance(provider_error, str):
+                error_message = provider_error
+            error_message = error_message or error_payload.get("error_description") or error_payload.get("message") or ""
+
+        if not error_message:
+            error_message = (getattr(response, "text", "") or "").strip()
+
+        detail = f": {error_message}" if error_message else "."
+        raise MailboxSyncError(f"Mailbox provider request failed with status {response.status_code}{detail}")
     return response.json()
 
 
@@ -350,7 +399,7 @@ def _iter_gmail_messages(account, limit):
         headers=headers,
         params={
             "maxResults": limit,
-            "q": " OR ".join(CONTRACT_KEYWORDS),
+            "q": "category:primary",
         },
     )
 
@@ -460,6 +509,12 @@ def sync_connected_account(account, limit=25):
     matched_contracts = []
 
     for message in messages:
+        if _has_emoji(message["subject"]):
+            continue
+
+        if not _has_solicitation_id(message["subject"], message["body"]):
+            continue
+
         matched_terms = _matched_contract_terms(message["subject"], message["body"])
         if not matched_terms:
             continue
